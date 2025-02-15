@@ -1,3 +1,4 @@
+
 import torch.optim as optim
 import torch.utils.data
 import torch
@@ -6,9 +7,6 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb
-from dataset.glas import get_glas_dataset
-from dataset.MoNuBrain import get_monu_dataset
-from dataset.polyp import get_polyp_dataset, get_tests_polyp_dataset
 from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from segment_anything.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
@@ -177,12 +175,10 @@ def main(args=None, sam_args=None):
     optimizer = optim.Adam(model.parameters(),
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
-    if args['task'] == 'monu':
-        trainset, testset = get_monu_dataset(args, sam_trans=transform)
-    elif args['task'] == 'glas':
-        trainset, testset = get_glas_dataset(args, sam_trans=transform)
-    elif args['task'] == 'polyp':
-        trainset, testset = get_polyp_dataset(args, sam_trans=transform)
+    if args['task'] == 'davsod':
+        trainset, testset = get_davsod_dataset(args.root_data_dir, sam_trans=transform)
+    else:
+        raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
                                      num_workers=int(args['nW']), drop_last=True)
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
@@ -205,6 +201,7 @@ def main(args=None, sam_args=None):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Description of your program')
+    parser.add_argument('--root_data_dir', required=True, help='root data directory')
     parser.add_argument('-lr', '--learning_rate', default=0.0003, help='learning_rate', required=False)
     parser.add_argument('-bs', '--Batch_size', default=3, help='batch_size', required=False)
     parser.add_argument('-epoches', '--epoches', default=5000, help='number of epoches', required=False)
@@ -246,4 +243,3 @@ if __name__ == '__main__':
         'gpu_id': 0,
     }
     main(args=args, sam_args=sam_args)
-
