@@ -1,9 +1,9 @@
 # AutoSAM
-AutoSAM: Adapting SAM to Medical Images by Overloading the Prompt Encoder
+AutoSAM2-VSOD: Adapting SAM2 to VSOD by Overloading the Prompt Encoder
 
 ## Overview
 
-This work improves the Segment Anything Model (SAM) for medical image segmentation by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification achieves state-of-the-art results on medical images and video benchmarks. 
+This work improves the Segment Anything Model 2 (SAM2) for medical image segmentation by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification achieves state-of-the-art results on medical images and video benchmarks. 
 
 ## Paper
 
