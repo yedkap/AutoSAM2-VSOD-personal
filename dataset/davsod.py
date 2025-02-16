@@ -5,6 +5,7 @@ import torchvision.transforms as transforms
 import numpy as np
 import torch
 import cv2
+from dataset.tfs import get_davsod_transform
 
 
 class DAVSODDataset(data.Dataset):
@@ -31,7 +32,7 @@ class DAVSODDataset(data.Dataset):
 
         self.images.sort()
         self.gts.sort()
-        self.filter_files()
+        # self.filter_files()
         self.size = len(self.images)
         self.train = train
         self.sam2_trans = sam_trans
@@ -76,9 +77,9 @@ class DAVSODDataset(data.Dataset):
 def get_davsod_dataset(root_dir, sam_trans=None):
     """Load training and testing datasets for DAVSOD"""
     transform_train, transform_test = get_davsod_transform()
-    dir_root_train = os.path.join(root_dir, 'DAVSOD/Training Set/images/')
+    dir_root_train = os.path.join(root_dir, 'DAVSOD/Training Set/')
     ds_train = DAVSODDataset(dir_root_train, augmentations=transform_train, sam_trans=sam_trans)
-    dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/masks/')
+    dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/')
     ds_test = DAVSODDataset(dir_root_val, train=False, augmentations=transform_test, sam_trans=sam_trans)
     return ds_train, ds_test
 #
