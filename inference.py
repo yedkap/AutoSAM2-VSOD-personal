@@ -5,8 +5,8 @@ from models.model_single import ModelEmb
 from dataset.glas import get_glas_dataset
 from dataset.MoNuBrain import get_monu_dataset
 from dataset.polyp import get_polyp_dataset, get_tests_polyp_dataset
-from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from segment_anything.utils.transforms import ResizeLongestSide
+from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+from segment_anything_1.utils.transforms import ResizeLongestSide
 from tqdm import tqdm
 import torch.nn.functional as F
 import numpy as np

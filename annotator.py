@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
 import torch
-from segment_anything import sam_model_registry
-from segment_anything.utils.transforms import ResizeLongestSide
+from segment_anything_1 import sam_model_registry
+from segment_anything_1.utils.transforms import ResizeLongestSide
 
 
 def sam_call(image, sam, points, original_size):

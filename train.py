@@ -7,8 +7,8 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb
-from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from segment_anything.utils.transforms import ResizeLongestSide
+from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+from segment_anything_1.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
 
 
