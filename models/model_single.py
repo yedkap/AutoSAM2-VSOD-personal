@@ -222,8 +222,8 @@ class ModelH(nn.Module):
 
 if __name__ == "__main__":
     import argparse
-    from segment_anything import sam_model_registry
-    from segment_anything.utils.transforms import ResizeLongestSide
+    from segment_anything_1 import sam_model_registry
+    from segment_anything_1.utils.transforms import ResizeLongestSide
 
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='image size', required=False)
