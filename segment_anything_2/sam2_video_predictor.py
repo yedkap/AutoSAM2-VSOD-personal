@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import warnings
 from collections import OrderedDict
 
 import torch
@@ -11,7 +12,7 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from sam2 import NO_OBJ_SCORE, SAM2Base
+from segment_anything_2.modeling.sam2_base import NO_OBJ_SCORE, SAM2Base
 from segment_anything_2.utils.misc import concat_points, fill_holes_in_mask_scores, load_video_frames
 
 

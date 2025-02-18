@@ -24,8 +24,8 @@ if torch.cuda.get_device_properties(0).major >= 8:
     torch.backends.cudnn.allow_tf32 = True
 
 # Config and checkpoint
-sam2_checkpoint = "checkpoints/sam2.1_hiera_base_plus.pt"
-model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+sam2_checkpoint = "checkpoints/segment_anything_2.1_hiera_base_plus.pt"
+model_cfg = "configs/segment_anything_2.1/segment_anything_2.1_hiera_b+.yaml"
 
 # Build video predictor with vos_optimized=True setting
 predictor = build_sam2_video_predictor(

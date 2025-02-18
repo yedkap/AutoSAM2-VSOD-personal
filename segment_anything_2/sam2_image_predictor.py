@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from PIL.Image import Image
 
-from sam2 import SAM2Base
+from segment_anything_2.modeling.sam2_base import SAM2Base
 
 from segment_anything_2.utils.transforms import SAM2Transforms
 

@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 
-from sam2 import apply_rotary_enc, compute_axial_cis
+from segment_anything_2.modeling.position_encoding import apply_rotary_enc, compute_axial_cis
 from segment_anything_2.modeling.sam2_utils import MLP
 
 

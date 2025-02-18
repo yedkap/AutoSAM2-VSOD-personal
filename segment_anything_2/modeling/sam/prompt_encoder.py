@@ -9,7 +9,7 @@ from typing import Optional, Tuple, Type
 import torch
 from torch import nn
 
-from sam2 import PositionEmbeddingRandom
+from segment_anything_2.modeling.position_encoding import PositionEmbeddingRandom
 
 from segment_anything_2.modeling.sam2_utils import LayerNorm2d
 
