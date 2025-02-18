@@ -89,7 +89,7 @@ def postprocess_masks(masks_dict):
     return masks, ious
 
 
-def train_single_epoch(ds, model, sam, optimizer, transform, epoch):
+def train_single_epoch(ds, model, sam, optimizer, transform, epoch, test_run=False):
     loss_list = []
     pbar = tqdm(ds)
     criterion = nn.BCELoss()
@@ -111,10 +111,12 @@ def train_single_epoch(ds, model, sam, optimizer, transform, epoch):
                 epoch=epoch,
                 loss=np.mean(loss_list)
             ))
+        if test_run:
+            break
     return np.mean(loss_list)
 
 
-def inference_ds(ds, model, sam, transform, epoch, args):
+def inference_ds(ds, model, sam, transform, epoch, args, test_run=False):
     pbar = tqdm(ds)
     model.eval()
     iou_list = []
@@ -145,6 +147,8 @@ def inference_ds(ds, model, sam, transform, epoch, args):
                 epoch=epoch,
                 dice=np.mean(dice_list),
                 iou=np.mean(iou_list)))
+        if test_run:
+            break
     model.train()
     return np.mean(iou_list)
 
@@ -164,7 +168,7 @@ def sam_call(batched_input, sam, dense_embeddings):
     return low_res_masks
 
 
-def main(args=None, sam_args=None):
+def main(args=None, sam_args=None, test_run=False):
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
@@ -177,7 +181,7 @@ def main(args=None, sam_args=None):
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args.root_data_dir, sam_trans=transform)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform)
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -188,15 +192,17 @@ def main(args=None, sam_args=None):
     path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
     f_best = open(path_best, 'w')
     for epoch in range(int(args['epoches'])):
-        train_single_epoch(ds, model.train(), sam.eval(), optimizer, transform, epoch)
+        train_single_epoch(ds, model.train(), sam.eval(), optimizer, transform, epoch, test_run)
         with torch.no_grad():
-            IoU_val = inference_ds(ds_val, model.eval(), sam, transform, epoch, args)
+            IoU_val = inference_ds(ds_val, model.eval(), sam, transform, epoch, args, test_run)
             if IoU_val > best:
                 torch.save(model, args['path_best'])
                 best = IoU_val
                 print('best results: ' + str(best))
                 f_best.write(str(epoch) + ',' + str(best) + '\n')
                 f_best.flush()
+                if test_run:
+                    break
 
 
 if __name__ == '__main__':
@@ -209,13 +215,14 @@ if __name__ == '__main__':
     parser.add_argument('-nW', '--nW', default=0, help='evaluation iteration', required=False)
     parser.add_argument('-nW_eval', '--nW_eval', default=0, help='evaluation iteration', required=False)
     parser.add_argument('-WD', '--WD', default=1e-4, help='evaluation iteration', required=False)
-    parser.add_argument('-task', '--task', default='glas', help='evaluation iteration', required=False)
+    parser.add_argument('-task', '--task', default='davsod', help='evaluation iteration', required=False)
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='image size', required=False)
     parser.add_argument('-order', '--order', default=85, help='image size', required=False)
     parser.add_argument('-Idim', '--Idim', default=512, help='image size', required=False)
     parser.add_argument('-rotate', '--rotate', default=22, help='image size', required=False)
     parser.add_argument('-scale1', '--scale1', default=0.75, help='image size', required=False)
     parser.add_argument('-scale2', '--scale2', default=1.25, help='image size', required=False)
+    parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     args = vars(parser.parse_args())
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
@@ -243,4 +250,6 @@ if __name__ == '__main__':
         },
         'gpu_id': 0,
     }
-    main(args=args, sam_args=sam_args)
+    if args['test_run']:
+        args['Batch_size'] = 1
+    main(args=args, sam_args=sam_args, test_run=args['test_run'])
