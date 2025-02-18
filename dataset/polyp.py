@@ -167,8 +167,8 @@ if __name__ == '__main__':
     from tqdm import tqdm
     import argparse
     from matplotlib import pyplot as plt
-    from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-    from segment_anything.utils.transforms import ResizeLongestSide
+    from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+    from segment_anything_1.utils.transforms import ResizeLongestSide
 
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('-Idim', '--Idim', default=512, help='learning_rate', required=False)
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     sam_args = {
-        'sam_checkpoint': "../cp/sam_vit_b_01ec64.pth",
+        'sam_checkpoint': "../cp_sam1/sam_vit_b_01ec64.pth",
         'model_type': "vit_b",
         'generator_args': {
             'points_per_side': 8,
