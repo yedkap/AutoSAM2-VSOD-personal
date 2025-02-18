@@ -4,13 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import numpy as np
-import torch
-
 import math
 from copy import deepcopy
 from itertools import product
 from typing import Any, Dict, Generator, ItemsView, List, Tuple
+
+import numpy as np
+import torch
+
+# Very lightly adapted from https://github.com/facebookresearch/segment-anything/blob/main/segment_anything/utils/amg.py
 
 
 class MaskData:
@@ -72,7 +74,7 @@ class MaskData:
     def to_numpy(self) -> None:
         for k, v in self._stats.items():
             if isinstance(v, torch.Tensor):
-                self._stats[k] = v.detach().cpu().numpy()
+                self._stats[k] = v.float().detach().cpu().numpy()
 
 
 def is_box_near_crop_edge(

@@ -4,13 +4,16 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import torch
-from torch import Tensor, nn
-
 import math
+from functools import partial
 from typing import Tuple, Type
 
-from .common import MLPBlock
+import torch
+import torch.nn.functional as F
+from torch import nn, Tensor
+
+from sam2 import apply_rotary_enc, compute_axial_cis
+from segment_anything_2.modeling.sam2_utils import MLP
 
 
 class TwoWayTransformer(nn.Module):
@@ -138,7 +141,9 @@ class TwoWayAttentionBlock(nn.Module):
         )
         self.norm2 = nn.LayerNorm(embedding_dim)
 
-        self.mlp = MLPBlock(embedding_dim, mlp_dim, activation)
+        self.mlp = MLP(
+            embedding_dim, mlp_dim, embedding_dim, num_layers=2, activation=activation
+        )
         self.norm3 = nn.LayerNorm(embedding_dim)
 
         self.norm4 = nn.LayerNorm(embedding_dim)
@@ -193,17 +198,24 @@ class Attention(nn.Module):
         embedding_dim: int,
         num_heads: int,
         downsample_rate: int = 1,
+        dropout: float = 0.0,
+        kv_in_dim: int = None,
     ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
+        self.kv_in_dim = kv_in_dim if kv_in_dim is not None else embedding_dim
         self.internal_dim = embedding_dim // downsample_rate
         self.num_heads = num_heads
-        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
+        assert (
+            self.internal_dim % num_heads == 0
+        ), "num_heads must divide embedding_dim."
 
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
-        self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
-        self.v_proj = nn.Linear(embedding_dim, self.internal_dim)
+        self.k_proj = nn.Linear(self.kv_in_dim, self.internal_dim)
+        self.v_proj = nn.Linear(self.kv_in_dim, self.internal_dim)
         self.out_proj = nn.Linear(self.internal_dim, embedding_dim)
+
+        self.dropout_p = dropout
 
     def _separate_heads(self, x: Tensor, num_heads: int) -> Tensor:
         b, n, c = x.shape
@@ -226,14 +238,73 @@ class Attention(nn.Module):
         k = self._separate_heads(k, self.num_heads)
         v = self._separate_heads(v, self.num_heads)
 
+        dropout_p = self.dropout_p if self.training else 0.0
         # Attention
-        _, _, _, c_per_head = q.shape
-        attn = q @ k.permute(0, 1, 3, 2)  # B x N_heads x N_tokens x N_tokens
-        attn = attn / math.sqrt(c_per_head)
-        attn = torch.softmax(attn, dim=-1)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
 
-        # Get output
-        out = attn @ v
+        out = self._recombine_heads(out)
+        out = self.out_proj(out)
+
+        return out
+
+
+class RoPEAttention(Attention):
+    """Attention with rotary position encoding."""
+
+    def __init__(
+        self,
+        *args,
+        rope_theta=10000.0,
+        # whether to repeat q rope to match k length
+        # this is needed for cross-attention to memories
+        rope_k_repeat=False,
+        feat_sizes=(64, 64),  # [w, h] for stride 16 feats at 1024 resolution
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+
+        self.compute_cis = partial(
+            compute_axial_cis, dim=self.internal_dim // self.num_heads, theta=rope_theta
+        )
+        freqs_cis = self.compute_cis(end_x=feat_sizes[0], end_y=feat_sizes[1])
+        self.freqs_cis = (
+            freqs_cis.to("cuda") if torch.cuda.is_available() else freqs_cis
+        )
+        self.rope_k_repeat = rope_k_repeat
+
+    def forward(
+        self, q: Tensor, k: Tensor, v: Tensor, num_k_exclude_rope: int = 0
+    ) -> Tensor:
+        # Input projections
+        q = self.q_proj(q)
+        k = self.k_proj(k)
+        v = self.v_proj(v)
+
+        # Separate into heads
+        q = self._separate_heads(q, self.num_heads)
+        k = self._separate_heads(k, self.num_heads)
+        v = self._separate_heads(v, self.num_heads)
+
+        # Apply rotary position encoding
+        w = h = math.sqrt(q.shape[-2])
+        self.freqs_cis = self.freqs_cis.to(q.device)
+        if self.freqs_cis.shape[0] != q.shape[-2]:
+            self.freqs_cis = self.compute_cis(end_x=w, end_y=h).to(q.device)
+        if q.shape[-2] != k.shape[-2]:
+            assert self.rope_k_repeat
+
+        num_k_rope = k.size(-2) - num_k_exclude_rope
+        q, k[:, :, :num_k_rope] = apply_rotary_enc(
+            q,
+            k[:, :, :num_k_rope],
+            freqs_cis=self.freqs_cis,
+            repeat_freqs_k=self.rope_k_repeat,
+        )
+
+        dropout_p = self.dropout_p if self.training else 0.0
+        # Attention
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
+
         out = self._recombine_heads(out)
         out = self.out_proj(out)
 

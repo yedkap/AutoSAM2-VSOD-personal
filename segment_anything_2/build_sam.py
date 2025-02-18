@@ -4,104 +4,171 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import logging
+import os
+
 import torch
+from hydra import compose
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
-from functools import partial
+import sam2
 
-from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer
-
-
-def build_sam_vit_h(checkpoint=None):
-    return _build_sam(
-        encoder_embed_dim=1280,
-        encoder_depth=32,
-        encoder_num_heads=16,
-        encoder_global_attn_indexes=[7, 15, 23, 31],
-        checkpoint=checkpoint,
+# Check if the user is running Python from the parent directory of the sam2 repo
+# (i.e. the directory where this repo is cloned into) -- this is not supported since
+# it could shadow the sam2 package and cause issues.
+if os.path.isdir(os.path.join(sam2.__path__[0], "sam2")):
+    # If the user has "sam2/sam2" in their path, they are likey importing the repo itself
+    # as "sam2" rather than importing the "sam2" python package (i.e. "sam2/sam2" directory).
+    # This typically happens because the user is running Python from the parent directory
+    # that contains the sam2 repo they cloned.
+    raise RuntimeError(
+        "You're likely running Python from the parent directory of the sam2 repository "
+        "(i.e. the directory where https://github.com/facebookresearch/sam2 is cloned into). "
+        "This is not supported since the `sam2` Python package could be shadowed by the "
+        "repository name (the repository is also named `sam2` and contains the Python package "
+        "in `sam2/sam2`). Please run Python from another directory (e.g. from the repo dir "
+        "rather than its parent dir, or from your home directory) after installing SAM 2."
     )
 
 
-build_sam = build_sam_vit_h
-
-
-def build_sam_vit_l(checkpoint=None):
-    return _build_sam(
-        encoder_embed_dim=1024,
-        encoder_depth=24,
-        encoder_num_heads=16,
-        encoder_global_attn_indexes=[5, 11, 17, 23],
-        checkpoint=checkpoint,
-    )
-
-
-def build_sam_vit_b(checkpoint=None):
-    return _build_sam(
-        encoder_embed_dim=768,
-        encoder_depth=12,
-        encoder_num_heads=12,
-        encoder_global_attn_indexes=[2, 5, 8, 11],
-        checkpoint=checkpoint,
-    )
-
-
-sam_model_registry = {
-    "default": build_sam_vit_h,
-    "vit_h": build_sam_vit_h,
-    "vit_l": build_sam_vit_l,
-    "vit_b": build_sam_vit_b,
+HF_MODEL_ID_TO_FILENAMES = {
+    "facebook/sam2-hiera-tiny": (
+        "configs/sam2/sam2_hiera_t.yaml",
+        "sam2_hiera_tiny.pt",
+    ),
+    "facebook/sam2-hiera-small": (
+        "configs/sam2/sam2_hiera_s.yaml",
+        "sam2_hiera_small.pt",
+    ),
+    "facebook/sam2-hiera-base-plus": (
+        "configs/sam2/sam2_hiera_b+.yaml",
+        "sam2_hiera_base_plus.pt",
+    ),
+    "facebook/sam2-hiera-large": (
+        "configs/sam2/sam2_hiera_l.yaml",
+        "sam2_hiera_large.pt",
+    ),
+    "facebook/sam2.1-hiera-tiny": (
+        "configs/sam2.1/sam2.1_hiera_t.yaml",
+        "sam2.1_hiera_tiny.pt",
+    ),
+    "facebook/sam2.1-hiera-small": (
+        "configs/sam2.1/sam2.1_hiera_s.yaml",
+        "sam2.1_hiera_small.pt",
+    ),
+    "facebook/sam2.1-hiera-base-plus": (
+        "configs/sam2.1/sam2.1_hiera_b+.yaml",
+        "sam2.1_hiera_base_plus.pt",
+    ),
+    "facebook/sam2.1-hiera-large": (
+        "configs/sam2.1/sam2.1_hiera_l.yaml",
+        "sam2.1_hiera_large.pt",
+    ),
 }
 
 
-def _build_sam(
-    encoder_embed_dim,
-    encoder_depth,
-    encoder_num_heads,
-    encoder_global_attn_indexes,
-    checkpoint=None,
+def build_sam2(
+    config_file,
+    ckpt_path=None,
+    device="cuda",
+    mode="eval",
+    hydra_overrides_extra=[],
+    apply_postprocessing=True,
+    **kwargs,
 ):
-    prompt_embed_dim = 256
-    image_size = 1024
-    vit_patch_size = 16
-    image_embedding_size = image_size // vit_patch_size
-    sam = Sam(
-        image_encoder=ImageEncoderViT(
-            depth=encoder_depth,
-            embed_dim=encoder_embed_dim,
-            img_size=image_size,
-            mlp_ratio=4,
-            norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
-            num_heads=encoder_num_heads,
-            patch_size=vit_patch_size,
-            qkv_bias=True,
-            use_rel_pos=True,
-            global_attn_indexes=encoder_global_attn_indexes,
-            window_size=14,
-            out_chans=prompt_embed_dim,
-        ),
-        prompt_encoder=PromptEncoder(
-            embed_dim=prompt_embed_dim,
-            image_embedding_size=(image_embedding_size, image_embedding_size),
-            input_image_size=(image_size, image_size),
-            mask_in_chans=16,
-        ),
-        mask_decoder=MaskDecoder(
-            num_multimask_outputs=3,
-            transformer=TwoWayTransformer(
-                depth=2,
-                embedding_dim=prompt_embed_dim,
-                mlp_dim=2048,
-                num_heads=8,
-            ),
-            transformer_dim=prompt_embed_dim,
-            iou_head_depth=3,
-            iou_head_hidden_dim=256,
-        ),
-        pixel_mean=[123.675, 116.28, 103.53],
-        pixel_std=[58.395, 57.12, 57.375],
+
+    if apply_postprocessing:
+        hydra_overrides_extra = hydra_overrides_extra.copy()
+        hydra_overrides_extra += [
+            # dynamically fall back to multi-mask if the single mask is not stable
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_via_stability=true",
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_delta=0.05",
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_thresh=0.98",
+        ]
+    # Read config and init model
+    cfg = compose(config_name=config_file, overrides=hydra_overrides_extra)
+    OmegaConf.resolve(cfg)
+    model = instantiate(cfg.model, _recursive_=True)
+    _load_checkpoint(model, ckpt_path)
+    model = model.to(device)
+    if mode == "eval":
+        model.eval()
+    return model
+
+
+def build_sam2_video_predictor(
+    config_file,
+    ckpt_path=None,
+    device="cuda",
+    mode="eval",
+    hydra_overrides_extra=[],
+    apply_postprocessing=True,
+    vos_optimized=False,
+    **kwargs,
+):
+    hydra_overrides = [
+        "++model._target_=sam2.sam2_video_predictor.SAM2VideoPredictor",
+    ]
+    if vos_optimized:
+        hydra_overrides = [
+            "++model._target_=sam2.sam2_video_predictor.SAM2VideoPredictorVOS",
+            "++model.compile_image_encoder=True",  # Let sam2_base handle this
+        ]
+
+    if apply_postprocessing:
+        hydra_overrides_extra = hydra_overrides_extra.copy()
+        hydra_overrides_extra += [
+            # dynamically fall back to multi-mask if the single mask is not stable
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_via_stability=true",
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_delta=0.05",
+            "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_thresh=0.98",
+            # the sigmoid mask logits on interacted frames with clicks in the memory encoder so that the encoded masks are exactly as what users see from clicking
+            "++model.binarize_mask_from_pts_for_mem_enc=true",
+            # fill small holes in the low-res masks up to `fill_hole_area` (before resizing them to the original video resolution)
+            "++model.fill_hole_area=8",
+        ]
+    hydra_overrides.extend(hydra_overrides_extra)
+
+    # Read config and init model
+    cfg = compose(config_name=config_file, overrides=hydra_overrides)
+    OmegaConf.resolve(cfg)
+    model = instantiate(cfg.model, _recursive_=True)
+    _load_checkpoint(model, ckpt_path)
+    model = model.to(device)
+    if mode == "eval":
+        model.eval()
+    return model
+
+
+def _hf_download(model_id):
+    from huggingface_hub import hf_hub_download
+
+    config_name, checkpoint_name = HF_MODEL_ID_TO_FILENAMES[model_id]
+    ckpt_path = hf_hub_download(repo_id=model_id, filename=checkpoint_name)
+    return config_name, ckpt_path
+
+
+def build_sam2_hf(model_id, **kwargs):
+    config_name, ckpt_path = _hf_download(model_id)
+    return build_sam2(config_file=config_name, ckpt_path=ckpt_path, **kwargs)
+
+
+def build_sam2_video_predictor_hf(model_id, **kwargs):
+    config_name, ckpt_path = _hf_download(model_id)
+    return build_sam2_video_predictor(
+        config_file=config_name, ckpt_path=ckpt_path, **kwargs
     )
-    sam.eval()
-    if checkpoint is not None:
-        with open(checkpoint, "rb") as f:
-            state_dict = torch.load(f)
-        sam.load_state_dict(state_dict)
-    return sam
+
+
+def _load_checkpoint(model, ckpt_path):
+    if ckpt_path is not None:
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)["model"]
+        missing_keys, unexpected_keys = model.load_state_dict(sd)
+        if missing_keys:
+            logging.error(missing_keys)
+            raise RuntimeError()
+        if unexpected_keys:
+            logging.error(unexpected_keys)
+            raise RuntimeError()
+        logging.info("Loaded checkpoint sucessfully")

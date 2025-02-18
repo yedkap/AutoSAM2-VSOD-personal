@@ -1,4 +1,3 @@
-
 import torch.optim as optim
 import torch.utils.data
 import torch
@@ -12,6 +11,7 @@ from dataset.davsod import get_davsod_dataset
 from segment_anything_1.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
 
+SAM_VERSION = 2
 
 def norm_batch(x):
     bs = x.shape[0]
@@ -94,10 +94,11 @@ def train_single_epoch(ds, model, sam, optimizer, transform, epoch, test_run=Fal
     pbar = tqdm(ds)
     criterion = nn.BCELoss()
     Idim = int(args['Idim'])
+    device = model.device
     optimizer.zero_grad()
     for ix, (imgs, gts, original_sz, img_sz) in enumerate(pbar):
-        orig_imgs = imgs.to(sam.device)
-        gts = gts.to(sam.device)
+        orig_imgs = imgs.to(device)
+        gts = gts.to(device)
         orig_imgs_small = F.interpolate(orig_imgs, (Idim, Idim), mode='bilinear', align_corners=True)
         dense_embeddings = model(orig_imgs_small)
         batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
@@ -122,9 +123,10 @@ def inference_ds(ds, model, sam, transform, epoch, args, test_run=False):
     iou_list = []
     dice_list = []
     Idim = int(args['Idim'])
+    device = model.device
     for imgs, gts, original_sz, img_sz in pbar:
-        orig_imgs = imgs.to(sam.device)
-        gts = gts.to(sam.device)
+        orig_imgs = imgs.to(device)
+        gts = gts.to(device)
         orig_imgs_small = F.interpolate(orig_imgs, (Idim, Idim), mode='bilinear', align_corners=True)
         dense_embeddings = model(orig_imgs_small)
         batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
@@ -154,6 +156,13 @@ def inference_ds(ds, model, sam, transform, epoch, args, test_run=False):
 
 
 def sam_call(batched_input, sam, dense_embeddings):
+    if SAM_VERSION == 1:
+        low_res_masks = sam_call_v1(batched_input, sam, dense_embeddings)
+    else:
+        raise Exception('mask creation not yet implemented for sam version 2')
+    return low_res_masks
+
+def sam_call_v1(batched_input, sam, dense_embeddings):
     with torch.no_grad():
         input_images = torch.stack([sam.preprocess(x["image"]) for x in batched_input], dim=0)
         image_embeddings = sam.image_encoder(input_images)
@@ -174,8 +183,12 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
     model = ModelEmb(args=args).to(device)
-    sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
+    if SAM_VERSION == 1:
+        sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
+    else:
+        raise Exception('model instance creation not yet implemented for sam version 2')
     sam.to(device=device)
+    # todo: check if this transform is necessary and sufficient for sam 2.
     transform = ResizeLongestSide(sam.image_encoder.img_size)
     optimizer = optim.Adam(model.parameters(),
                            lr=float(args['learning_rate']),
@@ -194,7 +207,7 @@ def main(args=None, sam_args=None, test_run=False):
     for epoch in range(int(args['epoches'])):
         train_single_epoch(ds, model.train(), sam.eval(), optimizer, transform, epoch, test_run)
         with torch.no_grad():
-            IoU_val = inference_ds(ds_val, model.eval(), sam, transform, epoch, args, test_run)
+            IoU_val = inference_ds(ds_val, model.eval(), sam.eval(), transform, epoch, args, test_run)
             if IoU_val > best:
                 torch.save(model, args['path_best'])
                 best = IoU_val
@@ -235,21 +248,24 @@ if __name__ == '__main__':
                                      'net_best.pth')
     args['vis_folder'] = os.path.join('results', 'gpu' + args['folder'], 'vis')
     os.mkdir(args['vis_folder'])
-    sam_args = {
-        'sam_checkpoint': "cp_sam1/sam_vit_h.pth",
-        'model_type': "vit_h",
-        'generator_args': {
-            'points_per_side': 8,
-            'pred_iou_thresh': 0.95,
-            'stability_score_thresh': 0.7,
-            'crop_n_layers': 0,
-            'crop_n_points_downscale_factor': 2,
-            'min_mask_region_area': 0,
-            'point_grids': None,
-            'box_nms_thresh': 0.7,
-        },
-        'gpu_id': 0,
-    }
+    if SAM_VERSION == 1:
+        sam_args = {
+            'sam_checkpoint': "cp_sam1/sam_vit_h.pth",
+            'model_type': "vit_h",
+            'generator_args': {
+                'points_per_side': 8,
+                'pred_iou_thresh': 0.95,
+                'stability_score_thresh': 0.7,
+                'crop_n_layers': 0,
+                'crop_n_points_downscale_factor': 2,
+                'min_mask_region_area': 0,
+                'point_grids': None,
+                'box_nms_thresh': 0.7,
+            },
+            'gpu_id': 0,
+        }
+    else:
+        raise Exception('sam args not yet implemented for sam version 2')
     if args['test_run']:
         args['Batch_size'] = 1
     main(args=args, sam_args=sam_args, test_run=args['test_run'])
