@@ -8,6 +8,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+from dataset import davsod
 from segment_anything_1.utils.transforms import ResizeLongestSide
 import torch.nn.functional as F
 
