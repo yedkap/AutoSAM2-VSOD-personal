@@ -232,7 +232,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # sam_args = {
-    #     'sam_checkpoint': "/home/tal/MedicalSam/cp/sam_vit_h_4b8939.pth",
+    #     'sam_checkpoint': "/home/tal/MedicalSam/cp_sam1/sam_vit_h_4b8939.pth",
     #     'model_type': "vit_h",
     #     'generator_args': {
     #         'points_per_side': 8,

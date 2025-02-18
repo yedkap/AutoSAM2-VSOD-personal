@@ -53,7 +53,7 @@ if __name__ == "__main__":
     image = cv2.imread("me.png")
     point = None
     sam_args = {
-        'sam_checkpoint': "cp/sam_vit_b.pth",
+        'sam_checkpoint': "cp_sam1/sam_vit_b.pth",
         'model_type': "vit_b",
         'generator_args': {
             'points_per_side': 8,

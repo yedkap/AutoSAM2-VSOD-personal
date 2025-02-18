@@ -15,7 +15,7 @@ import cv2
 
 
 sam_args = {
-    'sam_checkpoint': "cp/sam_vit_h.pth",
+    'sam_checkpoint': "cp_sam1/sam_vit_h.pth",
     'model_type': "vit_h",
     'generator_args':{
         'points_per_side': 8,
