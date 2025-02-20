@@ -12,8 +12,9 @@ from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLonge
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2
 import torch.nn.functional as F
+from utils import save_image
 
-SAM_VERSION = 1
+SAM_VERSION = 2
 
 def norm_batch(x):
     bs = x.shape[0]
@@ -117,42 +118,58 @@ def train_single_epoch(ds, model, sam, optimizer, transform, epoch, device, accu
             break
     return np.mean(loss_list)
 
+class InferenceDataset(torch.utils.data.Dataset):
+    def __init__(self, args, test_run=False):
+        self.eval_root = args['root_images_eval']
+        self.Idim = int(args['Idim'])
+        self.test_run = test_run
+        self.num_outputs = 120
 
-def inference_ds(ds, model, sam, transform, epoch, args, device, test_run=False):
-    pbar = tqdm(ds)
-    model.eval()
-    iou_list = []
-    dice_list = []
-    Idim = int(args['Idim'])
-    for imgs, gts, original_sz, img_sz in pbar:
-        orig_imgs = imgs.to(device)
-        gts = gts.to(device).unsqueeze(dim=0)
-        orig_imgs_small = F.interpolate(orig_imgs, (Idim, Idim), mode='bilinear', align_corners=True)
-        dense_embeddings = model(orig_imgs_small)
-        batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-        masks = norm_batch(sam_call(batched_input, sam, dense_embeddings))
-        # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
-        # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
-        # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
-        # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
-        masks = F.interpolate(masks, (Idim, Idim), mode='bilinear', align_corners=True)
-        gts = F.interpolate(gts, (Idim, Idim), mode='nearest')
-        masks[masks > 0.5] = 1
-        masks[masks <= 0.5] = 0
-        dice, ji = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
-                               gts.squeeze().detach().cpu().numpy())
-        iou_list.append(ji)
-        dice_list.append(dice)
-        pbar.set_description(
-            '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: IoU {iou:.4f}'.format(
-                task=args['task'],
-                epoch=epoch,
-                dice=np.mean(dice_list),
-                iou=np.mean(iou_list)))
-        if test_run:
-            break
-    model.train()
-    return np.mean(iou_list)
+    def inference_ds(self, ds, model, sam, transform, epoch, device):
+        num_images = len(ds)
+        denom = num_images // self.num_outputs
+        pbar = tqdm(ds)
+        model.eval()
+        iou_list = []
+        dice_list = []
+        eval_dir = os.path.join(self.eval_root, str(epoch))
+        if not os.path.isdir(eval_dir):
+            os.mkdir(eval_dir)
+        for ii, (imgs, gts, original_sz, img_sz) in enumerate(pbar):
+            orig_imgs = imgs.to(device)
+            gts = gts.to(device).unsqueeze(dim=0)
+            orig_imgs_small = F.interpolate(orig_imgs, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            dense_embeddings = model(orig_imgs_small)
+            batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
+            masks = norm_batch(sam_call(batched_input, sam, dense_embeddings))
+            # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
+            # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
+            # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
+            # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
+            masks = F.interpolate(masks, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            gts = F.interpolate(gts, (self.Idim, self.Idim), mode='nearest')
+            masks[masks > 0.5] = 1
+            masks[masks <= 0.5] = 0
+            dice, ji = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
+                                   gts.squeeze().detach().cpu().numpy())
+            iou_list.append(ji)
+            dice_list.append(dice)
+            pbar.set_description(
+                '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: IoU {iou:.4f}'.format(
+                    task=args['task'],
+                    epoch=epoch,
+                    dice=np.mean(dice_list),
+                    iou=np.mean(iou_list)))
+
+            if ii % denom == 0:
+                save_image(orig_imgs, f'{eval_dir}/image_in_{ii}.png', is_mask=False)
+                save_image(gts, f'{eval_dir}/gt_mask_{ii}.png', is_mask=True)
+                save_image(masks, f'{eval_dir}/pred_mask_{ii}.png', is_mask=True)
+
+            if self.test_run:
+                break
+        model.train()
+        return np.mean(iou_list)
 
 
 def sam_call(batched_input, sam, dense_embeddings):
@@ -205,7 +222,8 @@ def main(args=None, sam_args=None, test_run=False):
         # from hydra import initialize_config_module
         # initialize_config_module("sam2")
         # checkpoint = "cp_sam2/sam2.1_hiera_tiny.pt"
-        checkpoint = "cp_sam2/sam2.1_hiera_large.pt"
+        checkpoint = "cp_sam2/sam2.1_hiera_base_plus.pt"
+        # checkpoint = "cp_sam2/sam2.1_hiera_large.pt"
         model_cfg = sam_args['fp_config']
         # model_cfg = os.path.abspath(sam_args['fp_config'])
         sam = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint, device=device))
@@ -225,10 +243,13 @@ def main(args=None, sam_args=None, test_run=False):
     best = 0
     path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
     f_best = open(path_best, 'w')
+
+    inference_ds = InferenceDataset(args, test_run)
+
     for epoch in range(int(args['epoches'])):
-        train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        # train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
         with torch.no_grad():
-            IoU_val = inference_ds(ds_val, model.eval(), sam, transform, epoch, args, device, test_run)
+            IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
             if IoU_val > best:
                 torch.save(model, args['path_best'])
                 best = IoU_val
@@ -243,6 +264,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('--root_data_dir', required=True, help='root data directory')
+    # parser.add_argument('--eval_dir_root', default='eval', help='root eval image directory')
     parser.add_argument('-lr', '--learning_rate', default=0.0003, help='learning_rate', required=False)
     parser.add_argument('-bs', '--Batch_size', default=3, help='batch_size', required=False)
     parser.add_argument('-epoches', '--epoches', default=5000, help='number of epoches', required=False)
@@ -260,14 +282,18 @@ if __name__ == '__main__':
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
     args['folder'] = folder
-    args['path'] = os.path.join('results',
+    args['results_root'] = os.path.join('results',
                                 'gpu' + folder,
+                           )
+    args['path'] = os.path.join(args['results_root'],
                                 'net_last.pth')
-    args['path_best'] = os.path.join('results',
-                                     'gpu' + folder,
+    args['path_best'] = os.path.join(args['results_root'],
                                      'net_best.pth')
+    args['root_images_eval'] = os.path.join(args['results_root'],
+                                     'eval_images')
     args['vis_folder'] = os.path.join('results', 'gpu' + args['folder'], 'vis')
     os.mkdir(args['vis_folder'])
+    os.mkdir(args['root_images_eval'])
     if SAM_VERSION == 1:
         sam_args = {
             'sam_checkpoint': "cp_sam1/sam_vit_h.pth",
@@ -287,7 +313,8 @@ if __name__ == '__main__':
     else:
         sam_args = {
             # 'fp_config': "configs/sam2.1/sam2.1_hiera_t.yaml",
-            'fp_config': "configs/sam2.1/sam2.1_hiera_l.yaml",
+            'fp_config': "configs/sam2.1/sam2.1_hiera_b+.yaml",
+            # 'fp_config': "configs/sam2.1/sam2.1_hiera_l.yaml",
         }
         # raise Exception('sam args not yet implemented for sam version 2')
     if args['test_run']:
