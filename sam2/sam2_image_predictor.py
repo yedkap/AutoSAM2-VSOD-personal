@@ -12,9 +12,9 @@ import numpy as np
 import torch
 from PIL.Image import Image
 
-from segment_anything_2.modeling.sam2_base import SAM2Base
+from sam2.modeling.sam2_base import SAM2Base
 
-from segment_anything_2.utils.transforms import SAM2Transforms
+from sam2.utils.transforms import SAM2Transforms
 
 
 class SAM2ImagePredictor:
@@ -77,7 +77,7 @@ class SAM2ImagePredictor:
         Returns:
           (SAM2ImagePredictor): The loaded model.
         """
-        from segment_anything_2.build_sam import build_sam2_hf
+        from sam2.build_sam import build_sam2_hf
 
         sam_model = build_sam2_hf(model_id, **kwargs)
         return cls(sam_model, **kwargs)
@@ -181,6 +181,7 @@ class SAM2ImagePredictor:
         multimask_output: bool = True,
         return_logits: bool = False,
         normalize_coords=True,
+        prompt_embbedding_batch: List[torch.Tensor] = None,
     ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         """This function is very similar to predict(...), however it is used for batched mode, when the model is expected to generate predictions on multiple images.
         It returns a tuple of lists of masks, ious, and low_res_masks_logits.
@@ -196,16 +197,23 @@ class SAM2ImagePredictor:
         all_low_res_masks = []
         for img_idx in range(num_images):
             # Transform input prompts
-            point_coords = (
-                point_coords_batch[img_idx] if point_coords_batch is not None else None
-            )
-            point_labels = (
-                point_labels_batch[img_idx] if point_labels_batch is not None else None
-            )
-            box = box_batch[img_idx] if box_batch is not None else None
-            mask_input = (
-                mask_input_batch[img_idx] if mask_input_batch is not None else None
-            )
+            prompt_embbedding = prompt_embbedding_batch[img_idx] if prompt_embbedding_batch is not None else None
+            if prompt_embbedding is None:
+                point_coords = (
+                    point_coords_batch[img_idx] if point_coords_batch is not None else None
+                )
+                point_labels = (
+                    point_labels_batch[img_idx] if point_labels_batch is not None else None
+                )
+                box = box_batch[img_idx] if box_batch is not None else None
+                mask_input = (
+                    mask_input_batch[img_idx] if mask_input_batch is not None else None
+                )
+            else:
+                point_coords = None
+                point_labels = None
+                box = None
+                mask_input = None
             mask_input, unnorm_coords, labels, unnorm_box = self._prep_prompts(
                 point_coords,
                 point_labels,
@@ -222,15 +230,21 @@ class SAM2ImagePredictor:
                 multimask_output,
                 return_logits=return_logits,
                 img_idx=img_idx,
+                prompt_embbedding=prompt_embbedding,
             )
-            masks_np = masks.squeeze(0).float().detach().cpu().numpy()
-            iou_predictions_np = (
-                iou_predictions.squeeze(0).float().detach().cpu().numpy()
-            )
-            low_res_masks_np = low_res_masks.squeeze(0).float().detach().cpu().numpy()
-            all_masks.append(masks_np)
-            all_ious.append(iou_predictions_np)
-            all_low_res_masks.append(low_res_masks_np)
+            if prompt_embbedding is None:
+                masks_out = masks.squeeze(0).float().detach().cpu().numpy()
+                iou_predictions_out = (
+                    iou_predictions.squeeze(0).float().detach().cpu().numpy()
+                )
+                low_res_masks_out = low_res_masks.squeeze(0).float().detach().cpu().numpy()
+            else:
+                masks_out = masks.squeeze(0)
+                iou_predictions_out = iou_predictions.squeeze(0)
+                low_res_masks_out = low_res_masks.squeeze(0)
+            all_masks.append(masks_out)
+            all_ious.append(iou_predictions_out)
+            all_low_res_masks.append(low_res_masks_out)
 
         return all_masks, all_ious, all_low_res_masks
 
@@ -333,7 +347,6 @@ class SAM2ImagePredictor:
                 mask_input = mask_input[None, :, :, :]
         return mask_input, unnorm_coords, labels, unnorm_box
 
-    @torch.no_grad()
     def _predict(
         self,
         point_coords: Optional[torch.Tensor],
@@ -343,6 +356,7 @@ class SAM2ImagePredictor:
         multimask_output: bool = True,
         return_logits: bool = False,
         img_idx: int = -1,
+        prompt_embbedding: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Predict masks for the given input prompts, using the currently set image.
@@ -403,11 +417,19 @@ class SAM2ImagePredictor:
             else:
                 concat_points = (box_coords, box_labels)
 
-        sparse_embeddings, dense_embeddings = self.model.sam_prompt_encoder(
-            points=concat_points,
-            boxes=None,
-            masks=mask_input,
-        )
+        if prompt_embbedding is None:
+            sparse_embeddings, dense_embeddings = self.model.sam_prompt_encoder(
+                points=concat_points,
+                boxes=None,
+                masks=mask_input,
+            )
+        else:
+            dense_embeddings = prompt_embbedding
+            sparse_embeddings, _ = self.model.sam_prompt_encoder(
+                points=None,
+                boxes=None,
+                masks=None,
+            )
 
         # Predict masks
         batched_mode = (

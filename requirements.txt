@@ -143,6 +143,7 @@ heapdict=1.0.1=pyhd3eb1b0_0
 holoviews=1.17.1=py311hca03da5_0
 huggingface-hub=0.20.1=pypi_0
 hvplot=0.8.4=py311hca03da5_0
+hydra-core
 hyperlink=21.0.0=pyhd3eb1b0_0
 icu=68.1=hc377ac9_0
 idna=3.4=py311hca03da5_0
@@ -508,3 +509,14 @@ zope=1.0=py311hca03da5_1
 zope.interface=5.4.0=py311h80987f9_0
 zstandard=0.19.0=py311h80987f9_0
 zstd=1.5.5=hd90d995_0
+
+torch~=2.6.0
+torchvision~=0.21.0
+opencv-python~=4.11.0.86
+tqdm~=4.67.1
+numpy~=2.2.2
+pillow~=11.1.0
+matplotlib~=3.10.0
+omegaconf~=2.3.0
+
+iopath~=0.1.10

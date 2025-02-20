@@ -29,6 +29,8 @@ class DAVSODDataset(data.Dataset):
             gt_files = sorted([os.path.join(gt_dir, f) for f in os.listdir(gt_dir) if f.endswith('.png')])
             self.images.extend(img_files)
             self.gts.extend(gt_files)
+            # self.images.extend(img_files[::8])
+            # self.gts.extend(gt_files[::8])
 
         self.images.sort()
         self.gts.sort()
@@ -42,12 +44,16 @@ class DAVSODDataset(data.Dataset):
         gt = self.cv2_loader(self.gts[index], is_mask=True)
         img, mask = self.augmentations(image, gt)
         original_size = tuple(img.shape[1:3])
-        img, mask = self.sam2_trans.apply_image_torch(img), self.sam2_trans.apply_image_torch(mask)
+        if self.sam2_trans is not None:
+            img, mask = self.sam2_trans.apply_image_torch(img), self.sam2_trans.apply_image_torch(mask)
         mask[mask > 0.5] = 1
         mask[mask <= 0.5] = 0
         image_size = tuple(img.shape[1:3])
-        return self.sam2_trans.preprocess(img), self.sam2_trans.preprocess(mask), torch.Tensor(
-            original_size), torch.Tensor(image_size)
+        if self.sam2_trans is not None:
+            return self.sam2_trans.preprocess(img), self.sam2_trans.preprocess(mask), torch.Tensor(
+                original_size), torch.Tensor(image_size)
+        else:
+            return img, mask, torch.Tensor(original_size), torch.Tensor(image_size)
 
     def filter_files(self):
         """Ensure that only images with corresponding ground truth masks are used"""

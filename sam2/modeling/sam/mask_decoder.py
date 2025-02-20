@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Type
 import torch
 from torch import nn
 
-from segment_anything_2.modeling.sam2_utils import LayerNorm2d, MLP
+from sam2.modeling.sam2_utils import LayerNorm2d, MLP
 
 
 class MaskDecoder(nn.Module):
@@ -195,6 +195,7 @@ class MaskDecoder(nn.Module):
             sparse_prompt_embeddings.size(0), -1, -1
         )
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
+        # tokens = output_tokens
 
         # Expand per-image data in batch direction to be per-mask
         if repeat_image:

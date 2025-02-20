@@ -8,16 +8,18 @@ import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod import get_davsod_dataset
-from segment_anything_1.utils.transforms import ResizeLongestSide
+from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.build_sam import build_sam2
 import torch.nn.functional as F
 
-SAM_VERSION = 2
+SAM_VERSION = 1
 
 def norm_batch(x):
     bs = x.shape[0]
-    Isize = x.shape[-1]
-    min_value = x.view(bs, -1).min(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, Isize, Isize)
-    max_value = x.view(bs, -1).max(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, Isize, Isize)
+    H, W = x.shape[-2], x.shape[-1]
+    min_value = x.view(bs, -1).min(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, H, W)
+    max_value = x.view(bs, -1).max(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, H, W)
     x = (x - min_value) / (max_value - min_value + 1e-6)
     return x
 
@@ -89,12 +91,11 @@ def postprocess_masks(masks_dict):
     return masks, ious
 
 
-def train_single_epoch(ds, model, sam, optimizer, transform, epoch, test_run=False):
+def train_single_epoch(ds, model, sam, optimizer, transform, epoch, device, accumulation_steps, test_run=False):
     loss_list = []
     pbar = tqdm(ds)
     criterion = nn.BCELoss()
     Idim = int(args['Idim'])
-    device = model.device
     optimizer.zero_grad()
     for ix, (imgs, gts, original_sz, img_sz) in enumerate(pbar):
         orig_imgs = imgs.to(device)
@@ -103,7 +104,7 @@ def train_single_epoch(ds, model, sam, optimizer, transform, epoch, test_run=Fal
         dense_embeddings = model(orig_imgs_small)
         batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
         masks = norm_batch(sam_call(batched_input, sam, dense_embeddings))
-        loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=4, step=ix)
+        loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=accumulation_steps, step=ix)
         loss_list.append(loss)
         pbar.set_description(
             '(train | {}) epoch {epoch} ::'
@@ -117,24 +118,23 @@ def train_single_epoch(ds, model, sam, optimizer, transform, epoch, test_run=Fal
     return np.mean(loss_list)
 
 
-def inference_ds(ds, model, sam, transform, epoch, args, test_run=False):
+def inference_ds(ds, model, sam, transform, epoch, args, device, test_run=False):
     pbar = tqdm(ds)
     model.eval()
     iou_list = []
     dice_list = []
     Idim = int(args['Idim'])
-    device = model.device
     for imgs, gts, original_sz, img_sz in pbar:
         orig_imgs = imgs.to(device)
-        gts = gts.to(device)
+        gts = gts.to(device).unsqueeze(dim=0)
         orig_imgs_small = F.interpolate(orig_imgs, (Idim, Idim), mode='bilinear', align_corners=True)
         dense_embeddings = model(orig_imgs_small)
         batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
         masks = norm_batch(sam_call(batched_input, sam, dense_embeddings))
-        input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
-        original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
-        masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
-        gts = sam.postprocess_masks(gts.unsqueeze(dim=0), input_size=input_size, original_size=original_size)
+        # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
+        # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
+        # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
+        # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
         masks = F.interpolate(masks, (Idim, Idim), mode='bilinear', align_corners=True)
         gts = F.interpolate(gts, (Idim, Idim), mode='nearest')
         masks[masks > 0.5] = 1
@@ -159,7 +159,7 @@ def sam_call(batched_input, sam, dense_embeddings):
     if SAM_VERSION == 1:
         low_res_masks = sam_call_v1(batched_input, sam, dense_embeddings)
     else:
-        raise Exception('mask creation not yet implemented for sam version 2')
+        low_res_masks = sam_call_v2(batched_input, sam, dense_embeddings)
     return low_res_masks
 
 def sam_call_v1(batched_input, sam, dense_embeddings):
@@ -177,19 +177,40 @@ def sam_call_v1(batched_input, sam, dense_embeddings):
     return low_res_masks
 
 
+def sam_call_v2(batched_input, sam, dense_embeddings):
+    # with torch.no_grad():
+    with torch.no_grad():
+        input_images = [x["image"].permute((1, 2, 0)).cpu().numpy() for x in batched_input]
+        sam.set_image_batch(input_images)
+    low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embbedding_batch=dense_embeddings, multimask_output=False, return_logits=True)
+    low_res_masks = torch.stack(low_res_masks, axis=0)
+    return low_res_masks
+
+
 def main(args=None, sam_args=None, test_run=False):
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
+    # device = torch_directml.device()
+    # test_tensor = torch.tensor([1.0, 2.0, 3.0])
+    # test_tensor = test_tensor.to(device)
+    # print(test_tensor)
     model = ModelEmb(args=args).to(device)
     if SAM_VERSION == 1:
         sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
+        transform = ResizeLongestSide_sam1(sam.image_encoder.img_size)
     else:
-        raise Exception('model instance creation not yet implemented for sam version 2')
-    sam.to(device=device)
-    # todo: check if this transform is necessary and sufficient for sam 2.
-    transform = ResizeLongestSide(sam.image_encoder.img_size)
+        # os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        # from hydra import initialize_config_module
+        # initialize_config_module("sam2")
+        # checkpoint = "cp_sam2/sam2.1_hiera_tiny.pt"
+        checkpoint = "cp_sam2/sam2.1_hiera_large.pt"
+        model_cfg = sam_args['fp_config']
+        # model_cfg = os.path.abspath(sam_args['fp_config'])
+        sam = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint, device=device))
+        transform = None
+        assert not sam.model.training
     optimizer = optim.Adam(model.parameters(),
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
@@ -205,9 +226,9 @@ def main(args=None, sam_args=None, test_run=False):
     path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
     f_best = open(path_best, 'w')
     for epoch in range(int(args['epoches'])):
-        train_single_epoch(ds, model.train(), sam.eval(), optimizer, transform, epoch, test_run)
+        train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
         with torch.no_grad():
-            IoU_val = inference_ds(ds_val, model.eval(), sam.eval(), transform, epoch, args, test_run)
+            IoU_val = inference_ds(ds_val, model.eval(), sam, transform, epoch, args, device, test_run)
             if IoU_val > best:
                 torch.save(model, args['path_best'])
                 best = IoU_val
@@ -225,18 +246,17 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning_rate', default=0.0003, help='learning_rate', required=False)
     parser.add_argument('-bs', '--Batch_size', default=3, help='batch_size', required=False)
     parser.add_argument('-epoches', '--epoches', default=5000, help='number of epoches', required=False)
-    parser.add_argument('-nW', '--nW', default=0, help='evaluation iteration', required=False)
-    parser.add_argument('-nW_eval', '--nW_eval', default=0, help='evaluation iteration', required=False)
-    parser.add_argument('-WD', '--WD', default=1e-4, help='evaluation iteration', required=False)
-    parser.add_argument('-task', '--task', default='davsod', help='evaluation iteration', required=False)
-    parser.add_argument('-depth_wise', '--depth_wise', default=False, help='image size', required=False)
-    parser.add_argument('-order', '--order', default=85, help='image size', required=False)
+    parser.add_argument('-nW', '--nW', default=0, help='num workers train', required=False)
+    parser.add_argument('-nW_eval', '--nW_eval', default=0, help='num workers eval', required=False)
+    parser.add_argument('-WD', '--WD', default=0, help='weight decay', required=False)  # 1e-4
+    parser.add_argument('-task', '--task', default='davsod', help='segmenatation task type', required=False)
+    parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
+    parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=512, help='image size', required=False)
-    parser.add_argument('-rotate', '--rotate', default=22, help='image size', required=False)
-    parser.add_argument('-scale1', '--scale1', default=0.75, help='image size', required=False)
-    parser.add_argument('-scale2', '--scale2', default=1.25, help='image size', required=False)
     parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
+    parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
     args = vars(parser.parse_args())
+
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
     args['folder'] = folder
@@ -265,7 +285,11 @@ if __name__ == '__main__':
             'gpu_id': 0,
         }
     else:
-        raise Exception('sam args not yet implemented for sam version 2')
+        sam_args = {
+            # 'fp_config': "configs/sam2.1/sam2.1_hiera_t.yaml",
+            'fp_config': "configs/sam2.1/sam2.1_hiera_l.yaml",
+        }
+        # raise Exception('sam args not yet implemented for sam version 2')
     if args['test_run']:
         args['Batch_size'] = 1
     main(args=args, sam_args=sam_args, test_run=args['test_run'])
