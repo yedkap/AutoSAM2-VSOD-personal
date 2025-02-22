@@ -185,7 +185,8 @@ class InferenceDataset(torch.utils.data.Dataset):
             else:
                 dense_embeddings = call_model(model, orig_imgs_small)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-            masks, _ = norm_batch(sam_call(batched_input, sam, dense_embeddings))
+            masks, _ = sam_call(batched_input, sam, dense_embeddings)
+            masks = norm_batch(masks)
             # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
             # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
             # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
@@ -326,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=256, help='image size', required=False)
-    parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
+    parser.add_argument('--test_run', default=True, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
     args = vars(parser.parse_args())
 
