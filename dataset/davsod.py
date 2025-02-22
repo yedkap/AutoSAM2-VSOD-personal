@@ -38,6 +38,21 @@ class DAVSODDataset(data.Dataset):
         self.size = len(self.images)
         self.train = train
         self.sam2_trans = sam_trans
+        self.im_h = 360
+        self.im_w = 640
+
+    def pad_to_square(self, x: torch.Tensor) -> torch.Tensor:
+        """pad to a square input."""
+        h, w = x.shape[-2:]
+        assert h == self.im_h and w == self.im_w
+        if self.im_h > self.im_w:
+            padw = self.im_h - w
+            padh = 0
+        else:
+            padw = 0
+            padh = self.im_w - h
+        x = torch.nn.functional.pad(x, (0, padw, 0, padh))
+        return x
 
     def __getitem__(self, index):
         image = self.cv2_loader(self.images[index], is_mask=False)
@@ -53,7 +68,7 @@ class DAVSODDataset(data.Dataset):
             return self.sam2_trans.preprocess(img), self.sam2_trans.preprocess(mask), torch.Tensor(
                 original_size), torch.Tensor(image_size)
         else:
-            return img, mask, torch.Tensor(original_size), torch.Tensor(image_size)
+            return self.pad_to_square(img), self.pad_to_square(mask), torch.Tensor(original_size), torch.Tensor(image_size)
 
     def filter_files(self):
         """Ensure that only images with corresponding ground truth masks are used"""

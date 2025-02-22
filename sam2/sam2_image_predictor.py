@@ -181,7 +181,8 @@ class SAM2ImagePredictor:
         multimask_output: bool = True,
         return_logits: bool = False,
         normalize_coords=True,
-        prompt_embbedding_batch: List[torch.Tensor] = None,
+        prompt_embedding_batch: List[torch.Tensor] = None,
+        return_tensors=True
     ) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         """This function is very similar to predict(...), however it is used for batched mode, when the model is expected to generate predictions on multiple images.
         It returns a tuple of lists of masks, ious, and low_res_masks_logits.
@@ -197,8 +198,8 @@ class SAM2ImagePredictor:
         all_low_res_masks = []
         for img_idx in range(num_images):
             # Transform input prompts
-            prompt_embbedding = prompt_embbedding_batch[img_idx] if prompt_embbedding_batch is not None else None
-            if prompt_embbedding is None:
+            prompt_embedding = prompt_embedding_batch[img_idx] if prompt_embedding_batch is not None else None
+            if prompt_embedding is None:
                 point_coords = (
                     point_coords_batch[img_idx] if point_coords_batch is not None else None
                 )
@@ -230,9 +231,9 @@ class SAM2ImagePredictor:
                 multimask_output,
                 return_logits=return_logits,
                 img_idx=img_idx,
-                prompt_embbedding=prompt_embbedding,
+                prompt_embbedding=prompt_embedding,
             )
-            if prompt_embbedding is None:
+            if not return_tensors:
                 masks_out = masks.squeeze(0).float().detach().cpu().numpy()
                 iou_predictions_out = (
                     iou_predictions.squeeze(0).float().detach().cpu().numpy()
