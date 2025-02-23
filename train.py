@@ -97,10 +97,10 @@ def postprocess_masks(masks_dict):
     return masks, ious
 
 
-def call_model(model, model_input):
+def call_model(model, model_input, device):
     # Define pixel mean and std as tensors
-    pixel_mean = torch.tensor([123.675, 116.28, 103.53]).view(1, 3, 1, 1)
-    pixel_std = torch.tensor([58.395, 57.12, 57.375]).view(1, 3, 1, 1)
+    pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
+    pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
 
     # Normalize the input
     normalized_input = (model_input - pixel_mean) / pixel_std
@@ -131,7 +131,7 @@ class Trainer(torch.utils.data.Dataset):
             if SAM_VERSION == 1:
                 dense_embeddings = model(orig_imgs_small)
             else:
-                dense_embeddings = call_model(model, orig_imgs_small)
+                dense_embeddings = call_model(model, orig_imgs_small, device=device)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, masks_gt = sam_call(batched_input, sam, dense_embeddings)
             masks = norm_batch(masks)
@@ -183,7 +183,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             if SAM_VERSION == 1:
                 dense_embeddings = model(orig_imgs_small)
             else:
-                dense_embeddings = call_model(model, orig_imgs_small)
+                dense_embeddings = call_model(model, orig_imgs_small, device=device)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings)
             masks = norm_batch(masks)
