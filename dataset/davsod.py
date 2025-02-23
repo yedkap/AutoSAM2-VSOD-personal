@@ -13,7 +13,7 @@ class DAVSODDataset(data.Dataset):
     DataLoader for DAVSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_root, trainsize=352, augmentations=None, train=True, sam_trans=None):
+    def __init__(self, dir_root, trainsize=352, augmentations=None, train=True, sam_trans=None, subsample=False):
         self.trainsize = trainsize
         self.augmentations = augmentations
         # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
@@ -27,10 +27,12 @@ class DAVSODDataset(data.Dataset):
             gt_dir = os.path.join(video_dir, "GT_object_level")
             img_files = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith('.png')])
             gt_files = sorted([os.path.join(gt_dir, f) for f in os.listdir(gt_dir) if f.endswith('.png')])
-            self.images.extend(img_files)
-            self.gts.extend(gt_files)
-            # self.images.extend(img_files[::8])
-            # self.gts.extend(gt_files[::8])
+            if subsample:
+                self.images.extend(img_files[::8])
+                self.gts.extend(gt_files[::8])
+            else:
+                self.images.extend(img_files)
+                self.gts.extend(gt_files)
 
         self.images.sort()
         self.gts.sort()
@@ -41,7 +43,7 @@ class DAVSODDataset(data.Dataset):
         self.im_h = 360
         self.im_w = 640
 
-    def pad_to_square(self, x: torch.Tensor) -> torch.Tensor:
+    def pad_to_square(self, x: torch.Tensor, is_mask: bool = False) -> torch.Tensor:
         """pad to a square input."""
         h, w = x.shape[-2:]
         assert h == self.im_h and w == self.im_w
@@ -51,7 +53,7 @@ class DAVSODDataset(data.Dataset):
         else:
             padw = 0
             padh = self.im_w - h
-        x = torch.nn.functional.pad(x, (0, padw, 0, padh))
+        x = torch.nn.functional.pad(x, (0, padw, 0, padh), )
         return x
 
     def __getitem__(self, index):
@@ -95,13 +97,13 @@ class DAVSODDataset(data.Dataset):
         return self.size
 
 
-def get_davsod_dataset(root_dir, sam_trans=None):
+def get_davsod_dataset(root_dir, sam_trans=None, subsample_eval=False):
     """Load training and testing datasets for DAVSOD"""
     transform_train, transform_test = get_davsod_transform()
     dir_root_train = os.path.join(root_dir, 'DAVSOD/Training Set/')
     ds_train = DAVSODDataset(dir_root_train, augmentations=transform_train, sam_trans=sam_trans)
     dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/')
-    ds_test = DAVSODDataset(dir_root_val, train=False, augmentations=transform_test, sam_trans=sam_trans)
+    ds_test = DAVSODDataset(dir_root_val, train=False, augmentations=transform_test, sam_trans=sam_trans, subsample=subsample_eval)
     return ds_train, ds_test
 #
 #

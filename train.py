@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from utils import save_image
 
 SAM_VERSION = 2
+VIDEO_MODE = False
 
 def norm_batch(x):
     bs = x.shape[0]
@@ -84,17 +85,23 @@ def get_input_dict(imgs, original_sz, img_sz):
         }
         batched_input.append(singel_input)
     return batched_input
+#
+#
+# def postprocess_masks(masks_dict):
+#     masks = torch.zeros((len(masks_dict), *masks_dict[0]['low_res_logits'].squeeze().shape)).unsqueeze(dim=1).cuda()
+#     ious = torch.zeros(len(masks_dict)).cuda()
+#     for i in range(len(masks_dict)):
+#         cur_mask = masks_dict[i]['low_res_logits'].squeeze()
+#         cur_mask = (cur_mask - cur_mask.min()) / (cur_mask.max() - cur_mask.min())
+#         masks[i, 0] = cur_mask.squeeze()
+#         ious[i] = masks_dict[i]['iou_predictions'].squeeze()
+#     return masks, ious
 
 
-def postprocess_masks(masks_dict):
-    masks = torch.zeros((len(masks_dict), *masks_dict[0]['low_res_logits'].squeeze().shape)).unsqueeze(dim=1).cuda()
-    ious = torch.zeros(len(masks_dict)).cuda()
-    for i in range(len(masks_dict)):
-        cur_mask = masks_dict[i]['low_res_logits'].squeeze()
-        cur_mask = (cur_mask - cur_mask.min()) / (cur_mask.max() - cur_mask.min())
-        masks[i, 0] = cur_mask.squeeze()
-        ious[i] = masks_dict[i]['iou_predictions'].squeeze()
-    return masks, ious
+def unpad(mask, original_size):
+    H_orig, W_orig = int(original_size[0, 0]), int(original_size[0, 1])
+    mask = mask[..., :H_orig, :W_orig]
+    return mask
 
 
 def call_model(model, model_input, device):
@@ -134,12 +141,14 @@ class Trainer(torch.utils.data.Dataset):
                 dense_embeddings = call_model(model, orig_imgs_small, device=device)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, masks_gt = sam_call(batched_input, sam, dense_embeddings)
+            masks = unpad(masks, original_sz)
             masks = norm_batch(masks)
             if masks_gt is not None:
                 # gts = norm_batch(masks_gt)
                 masks_gt[masks_gt > 0.] = 1
                 masks_gt[masks_gt <= 0.] = 0
                 gts = masks_gt
+            gts = unpad(gts, original_sz)
             loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=accumulation_steps, step=ii)
             loss_list.append(loss)
             pbar.set_description(
@@ -150,7 +159,7 @@ class Trainer(torch.utils.data.Dataset):
                     loss=np.mean(loss_list)
                 ))
             if ii % denom == 0:
-                save_image(orig_imgs[0], f'{train_dir}/{ii}_image_in.png', is_mask=False)
+                save_image(unpad(orig_imgs[0], original_sz), f'{train_dir}/{ii}_image_in.png', is_mask=False)
                 save_image(gts[0], f'{train_dir}/{ii}_gt_mask.png', is_mask=True)
                 save_image(masks[0], f'{train_dir}/{ii}_pred_mask.png', is_mask=True)
 
@@ -191,10 +200,12 @@ class InferenceDataset(torch.utils.data.Dataset):
             # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
             # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
             # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
-            masks = F.interpolate(masks, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
-            gts = F.interpolate(gts, (self.Idim, self.Idim), mode='nearest')
+            # masks = F.interpolate(masks, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            # gts = F.interpolate(gts, (self.Idim, self.Idim), mode='nearest')
             masks[masks > 0.5] = 1
             masks[masks <= 0.5] = 0
+            masks = unpad(masks, original_sz)
+            gts = unpad(gts, original_sz)
             dice, ji = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             iou_list.append(ji)
@@ -207,7 +218,7 @@ class InferenceDataset(torch.utils.data.Dataset):
                     iou=np.mean(iou_list)))
 
             if ii % denom == 0:
-                save_image(orig_imgs, f'{eval_dir}/image_in_{ii}.png', is_mask=False)
+                save_image(unpad(orig_imgs, original_sz), f'{eval_dir}/image_in_{ii}.png', is_mask=False)
                 save_image(gts, f'{eval_dir}/gt_mask_{ii}.png', is_mask=True)
                 save_image(masks, f'{eval_dir}/pred_mask_{ii}.png', is_mask=True)
 
@@ -283,7 +294,7 @@ def main(args=None, sam_args=None, test_run=False):
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, subsample_eval=args['subsample_eval'],)
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -307,8 +318,10 @@ def main(args=None, sam_args=None, test_run=False):
                 print('best results: ' + str(best))
                 f_best.write(str(epoch) + ',' + str(best) + '\n')
                 f_best.flush()
-                if test_run:
-                    break
+            if epoch % int(args['save_every']) == 0:
+                torch.save(model, args['path_occasional'].format(epoch))
+        if test_run:
+            break
 
 
 if __name__ == '__main__':
@@ -329,6 +342,8 @@ if __name__ == '__main__':
     parser.add_argument('-Idim', '--Idim', default=256, help='image size', required=False)
     parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
+    parser.add_argument('--subsample_eval', default=False, type=bool, help='if True, loads only every 8th eval image. for still image mode only.', required=False)
+    parser.add_argument('--save_every', default=4, type=int, help='save every n epochs')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
@@ -341,12 +356,12 @@ if __name__ == '__main__':
                                 'net_last.pth')
     args['path_best'] = os.path.join(args['results_root'],
                                      'net_best.pth')
+    args['path_occasional'] = os.path.join(args['results_root'],
+                                     'net_epoch_{}.pth')
     args['root_images_eval'] = os.path.join(args['results_root'],
                                      'eval_images')
     args['root_images_train'] = os.path.join(args['results_root'],
                                      'train_images')
-    args['vis_folder'] = os.path.join('results', 'gpu' + args['folder'], 'vis')
-    os.mkdir(args['vis_folder'])
     os.mkdir(args['root_images_eval'])
     os.mkdir(args['root_images_train'])
     if SAM_VERSION == 1:
@@ -385,4 +400,6 @@ if __name__ == '__main__':
         # raise Exception('sam args not yet implemented for sam version 2')
     if args['test_run']:
         args['Batch_size'] = 1
+    if VIDEO_MODE:
+        assert args['subsample_eval'] is False
     main(args=args, sam_args=sam_args, test_run=args['test_run'])

@@ -10,7 +10,7 @@ from segment_anything_1.utils.transforms import ResizeLongestSide
 from tqdm import tqdm
 import torch.nn.functional as F
 import numpy as np
-from trainer import get_input_dict, norm_batch, get_dice_ji
+from train import get_input_dict, norm_batch, get_dice_ji
 import cv2
 
 
