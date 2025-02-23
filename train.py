@@ -367,7 +367,7 @@ if __name__ == '__main__':
         }
     else:
         if args['sam2_size'] == 'large':
-            checkpoint = "cp_   sam2/sam2.1_hiera_large.pt"
+            checkpoint = "cp_sam2/sam2.1_hiera_large.pt"
             fp_config = "configs/sam2.1/sam2.1_hiera_l.yaml"
         elif args['sam2_size'] == 'base_plus':
             checkpoint = "cp_sam2/sam2.1_hiera_base_plus.pt"
