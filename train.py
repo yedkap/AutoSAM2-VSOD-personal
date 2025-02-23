@@ -327,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=256, help='image size', required=False)
-    parser.add_argument('--test_run', default=True, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
+    parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
     args = vars(parser.parse_args())
 
