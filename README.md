@@ -25,7 +25,7 @@ We used the following datasets in our experiments:
 
 ## Usage
 
-To use AutoSAM, follow these steps:
+To use AutoSAM2-VSOD, follow these steps:
 
 1. Clone the repository:
 
