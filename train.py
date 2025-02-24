@@ -45,7 +45,13 @@ def get_dice_ji(predict, target):
     fn = np.sum(((predict == 1) * (target == 2)) * (target > 0))
     ji = float(np.nan_to_num(tp / (tp + fp + fn)))
     dice = float(np.nan_to_num(2 * tp / (2 * tp + fp + fn)))
-    return dice, ji
+
+    precision = float(np.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
+    recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
+    beta = 0.3
+    beta_sq = beta ** 2
+    f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (precision + recall) > 0 else 0.0
+    return dice, ji, f_beta
 
 
 def open_folder(path):
@@ -182,6 +188,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         model.eval()
         iou_list = []
         dice_list = []
+        f_beta_list = []
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
@@ -206,16 +213,18 @@ class InferenceDataset(torch.utils.data.Dataset):
             masks[masks <= 0.5] = 0
             masks = unpad(masks, original_sz)
             gts = unpad(gts, original_sz)
-            dice, ji = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
+            dice, ji, f_beta = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             iou_list.append(ji)
             dice_list.append(dice)
+            f_beta_list.append(f_beta)
             pbar.set_description(
-                '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: IoU {iou:.4f}'.format(
+                '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: IoU {iou:.4f} :: F_beta {f_beta:.4f}'.format(
                     task=args['task'],
                     epoch=epoch,
                     dice=np.mean(dice_list),
-                    iou=np.mean(iou_list)))
+                    iou=np.mean(iou_list),
+                    f_beta=np.mean(f_beta_list)))
 
             if ii % denom == 0:
                 save_image(unpad(orig_imgs, original_sz), f'{eval_dir}/image_in_{ii}.png', is_mask=False)
