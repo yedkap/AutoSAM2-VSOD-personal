@@ -163,9 +163,10 @@ def add_gaussian_noise(img, mean=0.0, std=0.05):
     return Image.fromarray(img_noisy)
 
 
-class DAVSODTransform:
-    def __init__(self):
+class DAVSODTransformVideo:
+    def __init__(self, is_eval):
         self.params = None  # Holds the randomly sampled parameters
+        self.is_eval = is_eval
 
     def rand_uniform(self, min=0., max=1.):
         start = float(torch.rand((1,))[0])
@@ -173,6 +174,8 @@ class DAVSODTransform:
         return rand_out
 
     def set_rand_params(self):
+        if self.is_eval:
+            self.params = None
         """Set random transformation parameters once per scene."""
         self.params = {
             "brightness_factor": self.rand_uniform(0.6, 1.4),
@@ -196,16 +199,18 @@ class DAVSODTransform:
             raise ValueError("Call set_rand_params() before using transform().")
         frame = F.to_pil_image(frame)
 
-        if not is_mask:
-            frame = F.adjust_brightness(frame, self.params["brightness_factor"])
-            frame = F.adjust_contrast(frame, self.params["contrast_factor"])
-            frame = F.adjust_saturation(frame, self.params["saturation_factor"])
-            frame = F.adjust_hue(frame, self.params["hue_factor"])
+        if not self.is_eval:
+            if not is_mask:
+                frame = F.adjust_brightness(frame, self.params["brightness_factor"])
+                frame = F.adjust_contrast(frame, self.params["contrast_factor"])
+                frame = F.adjust_saturation(frame, self.params["saturation_factor"])
+                frame = F.adjust_hue(frame, self.params["hue_factor"])
 
-        if self.params["flip"]:
-            frame = F.hflip(frame)
+            if self.params["flip"]:
+                frame = F.hflip(frame)
 
-        frame = F.affine(frame, angle=self.params["angle"], translate=[0, 0], scale=self.params["scale"], shear=[0])
+            frame = F.affine(frame, angle=self.params["angle"], translate=[0, 0], scale=self.params["scale"], shear=[0])
+
         frame = F.to_tensor(frame)
 
         return frame
