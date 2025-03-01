@@ -387,7 +387,7 @@ def main(args=None, sam_args=None, test_run=False):
     inference_ds = InferenceDataset(args, test_run)
 
     for epoch in range(int(args['epoches'])):
-        # trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
         if epoch % 20 == 0:
             with torch.no_grad():
                 IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
