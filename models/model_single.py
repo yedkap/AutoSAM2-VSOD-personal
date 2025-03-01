@@ -129,18 +129,19 @@ class Model(nn.Module):
 
 
 class ModelEmb(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, size_out=64):
         super(ModelEmb, self).__init__()
         self.backbone = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         d, f = self.backbone.full_features, self.backbone.features
         self.decoder = SmallDecoder(d, out=256)
         for param in self.backbone.parameters():
             param.requires_grad = True
+        self.size_out = size_out
 
     def forward(self, img, size=None):
         z = self.backbone(img)
         dense_embeddings = self.decoder(z)
-        dense_embeddings = F.interpolate(dense_embeddings, (64, 64), mode='bilinear', align_corners=True)
+        dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear', align_corners=True)
         return dense_embeddings
 
 

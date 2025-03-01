@@ -7,23 +7,26 @@ import os
 import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from dataset.davsod_still import get_davsod_dataset
+from dataset.davsod import get_davsod_dataset
 from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from sam2.build_sam import build_sam2
+from sam2.build_sam import build_sam2, build_sam2_video_predictor
 import torch.nn.functional as F
 from utils import save_image
+from sam2.sam2_video_predictor import SAM2VideoPredictor
 
 SAM_VERSION = 2
 VIDEO_MODE = False
 
 def norm_batch(x):
-    bs = x.shape[0]
+    bs, t, c = x.shape[0:3]
+    assert c == 1
     H, W = x.shape[-2], x.shape[-1]
-    min_value = x.view(bs, -1).min(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, H, W)
-    max_value = x.view(bs, -1).max(dim=1)[0].repeat(1, 1, 1, 1).permute(3, 2, 1, 0).repeat(1, 1, H, W)
+    min_value = x.view(bs, t, -1).min(dim=-1, keepdim=True)[0].view(bs, t, 1, 1, 1)
+    max_value = x.view(bs, t, -1).max(dim=-1, keepdim=True)[0].view(bs, t, 1, 1, 1)
     x = (x - min_value) / (max_value - min_value + 1e-6)
     # x = torch.sigmoid(x)
+    # raise Exception('not yet debugged.')
     return x
 
 
@@ -63,11 +66,12 @@ def open_folder(path):
 
 
 def gen_step(optimizer, gts, masks, criterion, accumulation_steps, step):
-    size = masks.shape[2:]
-    if len(masks.shape) == 3:
-        masks = masks.unsqueeze(dim=1)
-    if len(gts.shape) == 3:
-        gts = gts.unsqueeze(dim=1)
+    # B, T, C =  masks.shape
+    size = masks.shape[-2:]
+    if len(masks.shape) == 5:
+        masks = masks.squeeze(dim=-3)
+    if len(gts.shape) == 5:
+        gts = gts.squeeze(dim=-3)
     gts_sized = F.interpolate(gts, size, mode='nearest')
     loss = criterion(masks, gts_sized) + Dice_loss(masks, gts_sized)
     loss.backward()
@@ -105,6 +109,8 @@ def get_input_dict(imgs, original_sz, img_sz):
 
 
 def unpad(mask, original_size):
+    # if len(original_size.shape) == 2:
+    #     original_size = original_size[0]
     H_orig, W_orig = int(original_size[0, 0]), int(original_size[0, 1])
     mask = mask[..., :H_orig, :W_orig]
     return mask
@@ -114,18 +120,25 @@ def call_model(model, model_input, device):
     # Define pixel mean and std as tensors
     pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
-
     # Normalize the input
     normalized_input = (model_input - pixel_mean) / pixel_std
-    output = model(normalized_input)
-    return output
+
+    num_frames = model_input.shape[1]
+    outputs = []
+    for idx_frame in range(num_frames):
+        normalized_input_frame = normalized_input[:, idx_frame]
+        output = model(normalized_input_frame)
+        outputs.append(output)
+    outputs = torch.stack(outputs, dim=1)
+
+    return outputs
 
 class Trainer(torch.utils.data.Dataset):
     def __init__(self, args, test_run=False):
         self.train_root = args['root_images_train']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
-        self.num_outputs = 80
+        self.num_outputs = 3
 
     def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps, test_run=False):
         num_images = len(ds)
@@ -137,10 +150,18 @@ class Trainer(torch.utils.data.Dataset):
         train_dir = os.path.join(self.train_root, str(epoch))
         if not os.path.isdir(train_dir):
             os.mkdir(train_dir)
-        for ii, (imgs, gts, original_sz, img_sz) in enumerate(pbar):
+        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
+            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
+
+            assert torch.all(original_szs == original_szs[0, 0])
+            assert torch.all(img_szs == img_szs[0, 0])
+            img_sz = img_szs[:, 0]
+            original_sz = original_szs[:, 0]
+
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            orig_imgs_small = F.interpolate(orig_imgs, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             if SAM_VERSION == 1:
                 dense_embeddings = model(orig_imgs_small)
             else:
@@ -153,21 +174,24 @@ class Trainer(torch.utils.data.Dataset):
                 # gts = norm_batch(masks_gt)
                 masks_gt[masks_gt > 0.] = 1
                 masks_gt[masks_gt <= 0.] = 0
-                gts = masks_gt
+                gts = masks_gt.float()
             gts = unpad(gts, original_sz)
             loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=accumulation_steps, step=ii)
             loss_list.append(loss)
             pbar.set_description(
                 '(train | {}) epoch {epoch} ::'
                 ' loss {loss:.4f}'.format(
-                    'Medical',
+                    'VSOD',
                     epoch=epoch,
                     loss=np.mean(loss_list)
                 ))
             if ii % denom == 0:
-                save_image(unpad(orig_imgs[0], original_sz), f'{train_dir}/{ii}_image_in.png', is_mask=False)
-                save_image(gts[0], f'{train_dir}/{ii}_gt_mask.png', is_mask=True)
-                save_image(masks[0], f'{train_dir}/{ii}_pred_mask.png', is_mask=True)
+                save_image(unpad(orig_imgs[0, 0], original_sz), f'{train_dir}/{ii}_0_image_in.png', is_mask=False)
+                save_image(gts[0, 0], f'{train_dir}/{ii}_0_gt_mask.png', is_mask=True)
+                save_image(masks[0, 0], f'{train_dir}/{ii}_0_pred_mask.png', is_mask=True)
+                # save_image(unpad(orig_imgs[0, 1], original_sz), f'{train_dir}/{ii}_1_image_in.png', is_mask=False)
+                # save_image(gts[0, 1], f'{train_dir}/{ii}_1_gt_mask.png', is_mask=True)
+                # save_image(masks[0, 1], f'{train_dir}/{ii}_1_pred_mask.png', is_mask=True)
 
             if test_run:
                 break
@@ -179,8 +203,9 @@ class InferenceDataset(torch.utils.data.Dataset):
         self.eval_root = args['root_images_eval']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
-        self.num_outputs = 120
+        self.num_outputs = 3
 
+    @torch.inference_mode()
     def inference_ds(self, ds, model, sam, transform, epoch, device):
         num_images = len(ds)
         denom = num_images // self.num_outputs
@@ -192,10 +217,18 @@ class InferenceDataset(torch.utils.data.Dataset):
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
-        for ii, (imgs, gts, original_sz, img_sz) in enumerate(pbar):
+        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
+            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
+
+            assert torch.all(original_szs == original_szs[0, 0])
+            assert torch.all(img_szs == img_szs[0, 0])
+            img_sz = img_szs[:, 0]
+            original_sz = original_szs[:, 0]
+
             orig_imgs = imgs.to(device)
-            gts = gts.to(device).unsqueeze(dim=0)
-            orig_imgs_small = F.interpolate(orig_imgs, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            gts = gts.to(device)
+            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             if SAM_VERSION == 1:
                 dense_embeddings = model(orig_imgs_small)
             else:
@@ -227,9 +260,9 @@ class InferenceDataset(torch.utils.data.Dataset):
                     f_beta=np.mean(f_beta_list)))
 
             if ii % denom == 0:
-                save_image(unpad(orig_imgs, original_sz), f'{eval_dir}/image_in_{ii}.png', is_mask=False)
-                save_image(gts, f'{eval_dir}/gt_mask_{ii}.png', is_mask=True)
-                save_image(masks, f'{eval_dir}/pred_mask_{ii}.png', is_mask=True)
+                save_image(unpad(orig_imgs[0, 0], original_sz), f'{eval_dir}/image_in_{ii}.png', is_mask=False)
+                save_image(gts[0, 0], f'{eval_dir}/gt_mask_{ii}.png', is_mask=True)
+                save_image(masks[0, 0], f'{eval_dir}/pred_mask_{ii}.png', is_mask=True)
 
             if self.test_run:
                 break
@@ -243,6 +276,7 @@ def sam_call(batched_input, sam, dense_embeddings):
     else:
         low_res_masks, low_res_masks_gt = sam_call_v2(batched_input, sam, dense_embeddings)
     return low_res_masks, low_res_masks_gt
+
 
 def sam_call_v1(batched_input, sam, dense_embeddings):
     with torch.no_grad():
@@ -261,28 +295,57 @@ def sam_call_v1(batched_input, sam, dense_embeddings):
 
 def sam_call_v2(batched_input, sam, dense_embeddings):
     # with torch.no_grad():
+    input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
+    bs, num_frames, c, H, W = input_images.shape
+    # inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
+    fp = r'C:\Users\atara\Documents\datasets\DAVSOD\Training Set\select_0043\Imgs'
+    inference_state = sam.init_state(video_path=fp)
+    out_mask_logits = []
     with torch.no_grad():
-        input_images = [x["image"].permute((1, 2, 0)).cpu().numpy() / 255 for x in batched_input]
-        sam.set_image_batch(input_images)
-
-    fabricate_masks = False
-    if fabricate_masks:
-        with torch.no_grad():
-            H, W = batched_input[0]['image'].shape[-2:]
-            batch_size = len(batched_input)
-            input_points = np.array([[[(H * (360 / 640)) // 2, W // 2]] for _ in range(batch_size)]) #  cat batch_size
-            input_labels = np.array([[1] for _ in range(batch_size)]) #  cat batch_size
-            low_res_masks_gt, iou_predictions, _ = sam.predict_batch(
-                point_coords_batch=input_points, point_labels_batch=input_labels,
-                prompt_embedding_batch=None, multimask_output=False, return_logits=True
+        for frame_idx in range(num_frames):
+            # input_images_frame = input_images[:, frame_idx]
+            # dense_embeddings_frame = dense_embeddings[:, frame_idx]
+            # input_points = None
+            # input_labels = None
+            dense_embeddings_frame = None
+            input_points = np.array([[[(H * (360 / 640)) // 2 - 100, W // 2 + 100]] for _ in range(bs)]) #  cat batch_size
+            input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
+            _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
+                inference_state=inference_state,
+                frame_idx=frame_idx,
+                obj_id=0,
+                points=input_points,
+                labels=input_labels,
+                box=None,
+                dense_embeddings_pred=dense_embeddings_frame,
             )
-            low_res_masks_gt = torch.stack(low_res_masks_gt, dim=0)
-    else:
-        low_res_masks_gt = None
+            assert out_objs_ids_frame == [0]
+            out_mask_logits.append(out_mask_logits_frame)
+
+        # low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
+        #                                                       multimask_output=False, return_logits=True)
+    out_mask_logits = torch.stack(out_mask_logits, dim=1)
+    return out_mask_logits, None
+
+
+def sam_call_v3(batched_input, sam, dense_embeddings):
+    with torch.no_grad():
+        input_images = [x["image"].squeeze(0).permute((1, 2, 0)).cpu().numpy() / 255 for x in batched_input]
+        bs = len(input_images)
+        c, H, W = input_images[0].shape
+        sam.set_image_batch(input_images)
+    # dense_embeddings_frame = dense_embeddings[:, frame_idx]
+    # input_points = None
+    # input_labels = None
+    dense_embeddings = None
+    input_points = np.array([[[(H * (360 / 640)) // 2 - 100, W // 2 + 100]] for _ in range(bs)])  # cat batch_size
+    input_labels = np.array([[1] for _ in range(bs)])  # cat batch_size
     low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
+                                                          point_coords_batch=input_points,
+                                                          point_labels_batch=input_labels,
                                                           multimask_output=False, return_logits=True)
-    low_res_masks = torch.stack(low_res_masks, dim=0)
-    return low_res_masks, low_res_masks_gt
+    low_res_masks = torch.stack(low_res_masks, dim=0).unsqueeze(1)
+    return low_res_masks, None
 
 
 def main(args=None, sam_args=None, test_run=False):
@@ -290,20 +353,22 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    model = ModelEmb(args=args).to(device)
+    model = ModelEmb(args=args, size_out=64).to(device)
     if SAM_VERSION == 1:
         sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
         transform = ResizeLongestSide_sam1(sam.image_encoder.img_size)
     else:
         model_cfg = sam_args['fp_config']
-        sam = SAM2ImagePredictor(build_sam2(model_cfg, sam_args['checkpoint'], device=device))
+        sam = build_sam2_video_predictor(model_cfg, sam_args['checkpoint'], device=device)
+        sam.fill_hole_area = 0
+        assert not sam.training
+        # sam = SAM2ImagePredictor(build_sam2(model_cfg, sam_args['checkpoint'], device=device))
         transform = None
-        assert not sam.model.training
     optimizer = optim.Adam(model.parameters(),
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, subsample_eval=args['subsample_eval'],)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=1)
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -318,7 +383,7 @@ def main(args=None, sam_args=None, test_run=False):
     inference_ds = InferenceDataset(args, test_run)
 
     for epoch in range(int(args['epoches'])):
-        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        # trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
         with torch.no_grad():
             IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
             if IoU_val > best:
@@ -351,7 +416,7 @@ if __name__ == '__main__':
     parser.add_argument('-Idim', '--Idim', default=256, help='image size', required=False)
     parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
-    parser.add_argument('--subsample_eval', default=False, type=bool, help='if True, loads only every 8th eval image. for still image mode only.', required=False)
+    parser.add_argument('--cutoff_eval', default=None, type=bool, help='sets max length for eval datasets.', required=False)
     parser.add_argument('--save_every', default=4, type=int, help='save every n epochs')
     args = vars(parser.parse_args())
 
@@ -409,6 +474,7 @@ if __name__ == '__main__':
         # raise Exception('sam args not yet implemented for sam version 2')
     if args['test_run']:
         args['Batch_size'] = 1
+        args['cutoff_eval'] = 5
     if VIDEO_MODE:
         assert args['subsample_eval'] is False
     main(args=args, sam_args=sam_args, test_run=args['test_run'])

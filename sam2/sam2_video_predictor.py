@@ -41,7 +41,8 @@ class SAM2VideoPredictor(SAM2Base):
     @torch.inference_mode()
     def init_state(
         self,
-        video_path,
+        video_path=None,
+        images_in=None,
         offload_video_to_cpu=False,
         offload_state_to_cpu=False,
         async_loading_frames=False,
@@ -54,6 +55,7 @@ class SAM2VideoPredictor(SAM2Base):
             offload_video_to_cpu=offload_video_to_cpu,
             async_loading_frames=async_loading_frames,
             compute_device=compute_device,
+            images_in=images_in,
         )
         inference_state = {}
         inference_state["images"] = images
@@ -95,7 +97,11 @@ class SAM2VideoPredictor(SAM2Base):
         # metadata for each tracking frame (e.g. which direction it's tracked)
         inference_state["frames_tracked_per_obj"] = {}
         # Warm up the visual backbone and cache the image feature on frame 0
-        self._get_image_feature(inference_state, frame_idx=0, batch_size=1)
+        if images_in is not None:
+            bs = images.shape[1]
+        else:
+            bs = 1
+        self._get_image_feature(inference_state, frame_idx=0, batch_size=bs)
         return inference_state
 
     @classmethod
@@ -157,7 +163,6 @@ class SAM2VideoPredictor(SAM2Base):
         """Get the total number of unique object ids received so far in this session."""
         return len(inference_state["obj_idx_to_id"])
 
-    @torch.inference_mode()
     def add_new_points_or_box(
         self,
         inference_state,
@@ -168,6 +173,7 @@ class SAM2VideoPredictor(SAM2Base):
         clear_old_points=True,
         normalize_coords=True,
         box=None,
+        dense_embeddings_pred=None,
     ):
         """Add new points to a frame."""
         obj_idx = self._obj_id_to_idx(inference_state, obj_id)
@@ -176,15 +182,20 @@ class SAM2VideoPredictor(SAM2Base):
 
         if (points is not None) != (labels is not None):
             raise ValueError("points and labels must be provided together")
-        if points is None and box is None:
-            raise ValueError("at least one of points or box must be provided as input")
+        if points is None and box is None and dense_embeddings_pred is None:
+            raise ValueError("at least one of points or box or dense embedding must be provided as input")
 
+        if (dense_embeddings_pred is not None) and (len(dense_embeddings_pred.shape) == 4):
+            bs = dense_embeddings_pred.shape[0]
+            size_default = (bs, 0)
+        else:
+            size_default = (0,)
         if points is None:
-            points = torch.zeros(0, 2, dtype=torch.float32)
+            points = torch.zeros(*size_default, 2, dtype=torch.float32)
         elif not isinstance(points, torch.Tensor):
             points = torch.tensor(points, dtype=torch.float32)
         if labels is None:
-            labels = torch.zeros(0, dtype=torch.int32)
+            labels = torch.zeros(*size_default, dtype=torch.int32)
         elif not isinstance(labels, torch.Tensor):
             labels = torch.tensor(labels, dtype=torch.int32)
         if points.dim() == 2:
@@ -236,7 +247,7 @@ class SAM2VideoPredictor(SAM2Base):
         if is_init_cond_frame:
             reverse = False
         else:
-            reverse = obj_frames_tracked[frame_idx]["reverse"]
+            reverse = False
         obj_output_dict = inference_state["output_dict_per_obj"][obj_idx]
         obj_temp_output_dict = inference_state["temp_output_dict_per_obj"][obj_idx]
         # Add a frame to conditioning output if it's an initial conditioning frame or
@@ -264,7 +275,7 @@ class SAM2VideoPredictor(SAM2Base):
             inference_state=inference_state,
             output_dict=obj_output_dict,  # run on the slice of a single object
             frame_idx=frame_idx,
-            batch_size=1,  # run on the slice of a single object
+            batch_size=inference_state["images"].shape[1],  # run on the slice of a single object
             is_init_cond_frame=is_init_cond_frame,
             point_inputs=point_inputs,
             mask_inputs=None,
@@ -275,21 +286,30 @@ class SAM2VideoPredictor(SAM2Base):
             # them into memory.
             run_mem_encoder=False,
             prev_sam_mask_logits=prev_sam_mask_logits,
+            dense_embeddings_pred=dense_embeddings_pred,
         )
         # Add the output to the output dict (to be used as future memory)
-        obj_temp_output_dict[storage_key][frame_idx] = current_out
+        with torch.enable_grad():
+            obj_temp_output_dict[storage_key][frame_idx] = current_out
 
-        # Resize the output mask to the original video resolution
-        obj_ids = inference_state["obj_ids"]
-        consolidated_out = self._consolidate_temp_output_across_obj(
-            inference_state,
-            frame_idx,
-            is_cond=is_cond,
-            consolidate_at_video_res=True,
-        )
-        _, video_res_masks = self._get_orig_video_res_output(
-            inference_state, consolidated_out["pred_masks_video_res"]
-        )
+            # Resize the output mask to the original video resolution
+            obj_ids = inference_state["obj_ids"]
+            assert len(obj_ids) == 1
+            video_res_masks = torch.nn.functional.interpolate(
+                inference_state["temp_output_dict_per_obj"][obj_idx]["cond_frame_outputs"].get(frame_idx, None)["pred_masks"],
+                size=(inference_state["video_height"], inference_state["video_width"]),
+                mode="bilinear",
+                align_corners=False,
+            )
+            # consolidated_out = self._consolidate_temp_output_across_obj(
+            #     inference_state,
+            #     frame_idx,
+            #     is_cond=is_cond,
+            #     consolidate_at_video_res=True,
+            # )
+            # _, video_res_masks = self._get_orig_video_res_output(
+            #     inference_state, consolidated_out["pred_masks_video_res"]
+            # )
         return frame_idx, obj_ids, video_res_masks
 
     def add_new_points(self, *args, **kwargs):
@@ -710,7 +730,12 @@ class SAM2VideoPredictor(SAM2Base):
         if backbone_out is None:
             # Cache miss -- we will run inference on a single image
             device = inference_state["device"]
-            image = inference_state["images"][frame_idx].to(device).float().unsqueeze(0)
+            num_dims = len(inference_state["images"].shape)
+            if num_dims == 4:
+                image = inference_state["images"][frame_idx].to(device).float().unsqueeze(0)
+            else:
+                assert num_dims == 5
+                image = inference_state["images"][frame_idx].to(device).float()
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
             # a frame; we can use an LRU cache for more frames in the future).
@@ -746,6 +771,7 @@ class SAM2VideoPredictor(SAM2Base):
         reverse,
         run_mem_encoder,
         prev_sam_mask_logits=None,
+        dense_embeddings_pred=None,
     ):
         """Run tracking on a single frame based on current inputs and previous memory."""
         # Retrieve correct image features
@@ -772,6 +798,7 @@ class SAM2VideoPredictor(SAM2Base):
             track_in_reverse=reverse,
             run_mem_encoder=run_mem_encoder,
             prev_sam_mask_logits=prev_sam_mask_logits,
+            dense_embeddings_pred=dense_embeddings_pred,
         )
 
         # optionally offload the output to CPU memory to save GPU space

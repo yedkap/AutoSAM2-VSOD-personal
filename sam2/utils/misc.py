@@ -177,6 +177,7 @@ def load_video_frames(
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
+    images_in=None
 ):
     """
     Load the video frames from video_path. The frames are resized to image_size as in
@@ -185,7 +186,28 @@ def load_video_frames(
     is_bytes = isinstance(video_path, bytes)
     is_str = isinstance(video_path, str)
     is_mp4_path = is_str and os.path.splitext(video_path)[-1] in [".mp4", ".MP4"]
-    if is_bytes or is_mp4_path:
+    if images_in is not None:
+        video_height, video_width = images_in.shape[-2:]
+        images = images_in
+        T, B, C, H, W = images.shape
+
+        images_resized = torch.nn.functional.interpolate(
+            images.reshape(T * B, C, H, W), size=(image_size, image_size), mode="bicubic", align_corners=False
+        )
+        images_resized = images_resized.view(T, B, C, image_size, image_size)
+
+        img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
+        img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
+        if not offload_video_to_cpu:
+            images_resized = images_resized.to(compute_device)
+            img_mean = img_mean.to(compute_device)
+            img_std = img_std.to(compute_device)
+            # normalize by mean and std
+        images_resized -= img_mean
+        images_resized /= img_std
+        return images_resized, video_height, video_width
+
+    elif is_bytes or is_mp4_path:
         return load_video_frames_from_video_file(
             video_path=video_path,
             image_size=image_size,
@@ -243,7 +265,7 @@ def load_video_frames_from_jpg_images(
     frame_names = [
         p
         for p in os.listdir(jpg_folder)
-        if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
+        if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG", '.png']
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
     num_frames = len(frame_names)
