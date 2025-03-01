@@ -372,7 +372,7 @@ def main(args=None, sam_args=None, test_run=False):
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=2)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -388,6 +388,8 @@ def main(args=None, sam_args=None, test_run=False):
 
     for epoch in range(int(args['epoches'])):
         trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        if epoch % int(args['save_every']) == 0:
+            torch.save(model, args['path_occasional'].format(epoch))
         if epoch % 20 == 0:
             with torch.no_grad():
                 IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
@@ -397,8 +399,6 @@ def main(args=None, sam_args=None, test_run=False):
                     print('best results: ' + str(best))
                     f_best.write(str(epoch) + ',' + str(best) + '\n')
                     f_best.flush()
-                if epoch % int(args['save_every']) == 0:
-                    torch.save(model, args['path_occasional'].format(epoch))
             if test_run:
                 break
 
@@ -422,7 +422,8 @@ if __name__ == '__main__':
     parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
-    parser.add_argument('--save_every', default=4, type=int, help='save every n epochs')
+    parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
+    parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
