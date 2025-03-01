@@ -361,7 +361,9 @@ class SAM2Base(torch.nn.Module):
                 repeat_image=False,  # the image is already batched
                 high_res_features=high_res_features,
             )
-            pred_obj_scores = self.pred_obj_scores and (dense_embeddings_pred is None)
+            # YK: hard coded change
+            pred_obj_scores = False and (dense_embeddings_pred is None)
+            # pred_obj_scores = self.pred_obj_scores and (dense_embeddings_pred is None)
             if pred_obj_scores:
                 is_obj_appearing = object_score_logits > 0
 
@@ -879,15 +881,16 @@ class SAM2Base(torch.nn.Module):
 
         # Finally run the memory encoder on the predicted mask to encode
         # it into a new memory feature (that can be used in future frames)
-        self._encode_memory_in_output(
-            current_vision_feats,
-            feat_sizes,
-            point_inputs,
-            run_mem_encoder,
-            high_res_masks,
-            object_score_logits,
-            current_out,
-        )
+        with torch.no_grad():
+            self._encode_memory_in_output(
+                current_vision_feats,
+                feat_sizes,
+                point_inputs,
+                run_mem_encoder,
+                high_res_masks,
+                object_score_logits,
+                current_out,
+            )
 
         return current_out
 

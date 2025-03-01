@@ -265,7 +265,10 @@ class SAM2VideoPredictor(SAM2Base):
             prev_out = obj_output_dict["cond_frame_outputs"].get(frame_idx)
             if prev_out is None:
                 prev_out = obj_output_dict["non_cond_frame_outputs"].get(frame_idx)
-
+        if len(inference_state["images"].shape) == 4:
+            bs = 1
+        else:
+            bs = inference_state["images"].shape[1]
         if prev_out is not None and prev_out["pred_masks"] is not None:
             device = inference_state["device"]
             prev_sam_mask_logits = prev_out["pred_masks"].to(device, non_blocking=True)
@@ -275,7 +278,7 @@ class SAM2VideoPredictor(SAM2Base):
             inference_state=inference_state,
             output_dict=obj_output_dict,  # run on the slice of a single object
             frame_idx=frame_idx,
-            batch_size=inference_state["images"].shape[1],  # run on the slice of a single object
+            batch_size=bs,  # run on the slice of a single object
             is_init_cond_frame=is_init_cond_frame,
             point_inputs=point_inputs,
             mask_inputs=None,
@@ -815,7 +818,8 @@ class SAM2VideoPredictor(SAM2Base):
             )
         pred_masks = pred_masks_gpu.to(storage_device, non_blocking=True)
         # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
-        maskmem_pos_enc = self._get_maskmem_pos_enc(inference_state, current_out)
+        with torch.no_grad():
+            maskmem_pos_enc = self._get_maskmem_pos_enc(inference_state, current_out)
         # object pointer is a small tensor, so we always keep it on GPU memory for fast access
         obj_ptr = current_out["obj_ptr"]
         object_score_logits = current_out["object_score_logits"]

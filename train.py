@@ -7,7 +7,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from dataset.davsod_still import get_davsod_dataset
+from dataset.davsod import get_davsod_dataset
 from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     parser.add_argument('--root_data_dir', required=True, help='root data directory')
     parser.add_argument('--sam2_size', default='large', help='root data directory')
     # parser.add_argument('--eval_dir_root', default='eval', help='root eval image directory')
-    parser.add_argument('-lr', '--learning_rate', default=0.0003, help='learning_rate', required=False)
+    parser.add_argument('-lr', '--learning_rate', default=0.0003, help='learning_rate', required=False) # 0.0003
     parser.add_argument('-bs', '--Batch_size', default=3, help='batch_size', required=False)
     parser.add_argument('-epoches', '--epoches', default=200, help='number of epoches', required=False)
     parser.add_argument('-nW', '--nW', default=0, help='num workers train', required=False)

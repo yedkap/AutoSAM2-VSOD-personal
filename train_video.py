@@ -7,7 +7,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from dataset.davsod import get_davsod_dataset
+from dataset.davsod_video import get_davsod_dataset
 from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2, build_sam2_video_predictor
@@ -189,9 +189,9 @@ class Trainer(torch.utils.data.Dataset):
                 save_image(unpad(orig_imgs[0, 0], original_sz), f'{train_dir}/{ii}_0_image_in.png', is_mask=False)
                 save_image(gts[0, 0], f'{train_dir}/{ii}_0_gt_mask.png', is_mask=True)
                 save_image(masks[0, 0], f'{train_dir}/{ii}_0_pred_mask.png', is_mask=True)
-                # save_image(unpad(orig_imgs[0, 1], original_sz), f'{train_dir}/{ii}_1_image_in.png', is_mask=False)
-                # save_image(gts[0, 1], f'{train_dir}/{ii}_1_gt_mask.png', is_mask=True)
-                # save_image(masks[0, 1], f'{train_dir}/{ii}_1_pred_mask.png', is_mask=True)
+                save_image(unpad(orig_imgs[0, 1], original_sz), f'{train_dir}/{ii}_1_image_in.png', is_mask=False)
+                save_image(gts[0, 1], f'{train_dir}/{ii}_1_gt_mask.png', is_mask=True)
+                save_image(masks[0, 1], f'{train_dir}/{ii}_1_pred_mask.png', is_mask=True)
 
             if test_run:
                 break
@@ -203,7 +203,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         self.eval_root = args['root_images_eval']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
-        self.num_outputs = 3
+        self.num_outputs = 5
 
     @torch.inference_mode()
     def inference_ds(self, ds, model, sam, transform, epoch, device):
@@ -260,9 +260,11 @@ class InferenceDataset(torch.utils.data.Dataset):
                     f_beta=np.mean(f_beta_list)))
 
             if ii % denom == 0:
-                save_image(unpad(orig_imgs[0, 0], original_sz), f'{eval_dir}/image_in_{ii}.png', is_mask=False)
-                save_image(gts[0, 0], f'{eval_dir}/gt_mask_{ii}.png', is_mask=True)
-                save_image(masks[0, 0], f'{eval_dir}/pred_mask_{ii}.png', is_mask=True)
+                for idx_frame in range(seq_len):
+                    if idx_frame % 8 == 0:
+                        save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{idx_frame}_0_image_in.png', is_mask=False)
+                        save_image(gts[0, idx_frame], f'{eval_dir}/{idx_frame}_0_gt_mask.png', is_mask=True)
+                        save_image(masks[0, idx_frame], f'{eval_dir}/{idx_frame}_0_pred_mask.png', is_mask=True)
 
             if self.test_run:
                 break
@@ -297,30 +299,32 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
     # with torch.no_grad():
     input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
     bs, num_frames, c, H, W = input_images.shape
-    # inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
-    fp = r'C:\Users\atara\Documents\datasets\DAVSOD\Training Set\select_0043\Imgs'
-    inference_state = sam.init_state(video_path=fp)
+    inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
+    # fp = r'C:\Users\atara\Documents\datasets\test_folder'
+    # inference_state = sam.init_state(video_path=fp)
     out_mask_logits = []
-    with torch.no_grad():
-        for frame_idx in range(num_frames):
-            # input_images_frame = input_images[:, frame_idx]
-            # dense_embeddings_frame = dense_embeddings[:, frame_idx]
-            # input_points = None
-            # input_labels = None
-            dense_embeddings_frame = None
-            input_points = np.array([[[(H * (360 / 640)) // 2 - 100, W // 2 + 100]] for _ in range(bs)]) #  cat batch_size
-            input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
+    for frame_idx in range(num_frames):
+        input_images_frame = input_images[:, frame_idx]
+        dense_embeddings_frame = dense_embeddings[:, frame_idx]
+        input_points = None
+        input_labels = None
+        # dense_embeddings_frame = None
+        # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)]) #  cat batch_size
+        # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
+        with torch.no_grad():
             _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
-                inference_state=inference_state,
-                frame_idx=frame_idx,
-                obj_id=0,
-                points=input_points,
-                labels=input_labels,
-                box=None,
-                dense_embeddings_pred=dense_embeddings_frame,
+            inference_state=inference_state,
+            frame_idx=frame_idx,
+            obj_id=0,
+            points=input_points,
+            labels=input_labels,
+            box=None,
+            dense_embeddings_pred=dense_embeddings_frame,
             )
-            assert out_objs_ids_frame == [0]
-            out_mask_logits.append(out_mask_logits_frame)
+        out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
+        assert out_objs_ids_frame == [0]
+        out_mask_logits.append(out_mask_logits_frame)
+
 
         # low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
         #                                                       multimask_output=False, return_logits=True)
@@ -332,14 +336,14 @@ def sam_call_v3(batched_input, sam, dense_embeddings):
     with torch.no_grad():
         input_images = [x["image"].squeeze(0).permute((1, 2, 0)).cpu().numpy() / 255 for x in batched_input]
         bs = len(input_images)
-        c, H, W = input_images[0].shape
+        H, W, c = input_images[0].shape[-3:]
         sam.set_image_batch(input_images)
-    # dense_embeddings_frame = dense_embeddings[:, frame_idx]
-    # input_points = None
-    # input_labels = None
-    dense_embeddings = None
-    input_points = np.array([[[(H * (360 / 640)) // 2 - 100, W // 2 + 100]] for _ in range(bs)])  # cat batch_size
-    input_labels = np.array([[1] for _ in range(bs)])  # cat batch_size
+    dense_embeddings_frame = dense_embeddings.squeeze(1)
+    input_points = None
+    input_labels = None
+    # dense_embeddings = None
+    # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)])  # cat batch_size
+    # input_labels = np.array([[1] for _ in range(bs)])  # cat batch_size
     low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
                                                           point_coords_batch=input_points,
                                                           point_labels_batch=input_labels,
@@ -368,7 +372,7 @@ def main(args=None, sam_args=None, test_run=False):
                            lr=float(args['learning_rate']),
                            weight_decay=float(args['WD']))
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=1)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=2)
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -384,18 +388,19 @@ def main(args=None, sam_args=None, test_run=False):
 
     for epoch in range(int(args['epoches'])):
         # trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
-        with torch.no_grad():
-            IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
-            if IoU_val > best:
-                torch.save(model, args['path_best'])
-                best = IoU_val
-                print('best results: ' + str(best))
-                f_best.write(str(epoch) + ',' + str(best) + '\n')
-                f_best.flush()
-            if epoch % int(args['save_every']) == 0:
-                torch.save(model, args['path_occasional'].format(epoch))
-        if test_run:
-            break
+        if epoch % 20 == 0:
+            with torch.no_grad():
+                IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
+                if IoU_val > best:
+                    torch.save(model, args['path_best'])
+                    best = IoU_val
+                    print('best results: ' + str(best))
+                    f_best.write(str(epoch) + ',' + str(best) + '\n')
+                    f_best.flush()
+                if epoch % int(args['save_every']) == 0:
+                    torch.save(model, args['path_occasional'].format(epoch))
+            if test_run:
+                break
 
 
 if __name__ == '__main__':
@@ -416,7 +421,7 @@ if __name__ == '__main__':
     parser.add_argument('-Idim', '--Idim', default=256, help='image size', required=False)
     parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
-    parser.add_argument('--cutoff_eval', default=None, type=bool, help='sets max length for eval datasets.', required=False)
+    parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
     parser.add_argument('--save_every', default=4, type=int, help='save every n epochs')
     args = vars(parser.parse_args())
 
