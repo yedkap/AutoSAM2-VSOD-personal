@@ -31,7 +31,9 @@ class DAVSODDataset(data.Dataset):
                 assert os.path.basename(img_file) == os.path.basename(gt_file)
 
             if cutoff is not None:
+                print(len(img_files))
                 img_files = img_files[:(cutoff * self.frame_skip)]
+                print(len(img_files))
                 mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
