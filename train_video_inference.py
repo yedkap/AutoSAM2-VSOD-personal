@@ -314,7 +314,7 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
             _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
             inference_state=inference_state,
             frame_idx=frame_idx,
-            obj_id=frame_idx,
+            obj_id=0,
             points=input_points,
             labels=input_labels,
             box=None,
@@ -429,7 +429,6 @@ if __name__ == '__main__':
     parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
-    parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
