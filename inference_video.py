@@ -235,7 +235,7 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
     inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
     # fp = r'C:\Users\atara\Documents\datasets\test_folder'
     # inference_state = sam.init_state(video_path=fp)
-    out_mask_logits = []
+    out_mask_logits_initial = []
     for frame_idx in range(num_frames):
         input_images_frame = input_images[:, frame_idx]
         dense_embeddings_frame = dense_embeddings[:, frame_idx]
@@ -257,11 +257,16 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
         out_mask_logits.append(out_mask_logits_frame)
+    out_mask_logits_final = []
+    for out_frame_idx, out_obj_ids, out_mask_logits_frame in predictor.propagate_in_video(inference_state):
+        out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
+        assert out_objs_ids_frame == [0]
+        out_mask_logits_final.append(out_mask_logits_frame)
 
 
         # low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
         #                                                       multimask_output=False, return_logits=True)
-    out_mask_logits = torch.stack(out_mask_logits, dim=1)
+    out_mask_logits = torch.stack(out_mask_logits_final, dim=1)
     return out_mask_logits, None
 
 
