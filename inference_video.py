@@ -229,18 +229,34 @@ def sam_call_v1(batched_input, sam, dense_embeddings):
 
 
 def sam_call_v2(batched_input, sam, dense_embeddings):
-    # with torch.no_grad():
-    input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
-    bs, num_frames, c, H, W = input_images.shape
-    inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
-    # fp = r'C:\Users\atara\Documents\datasets\test_folder'
-    # inference_state = sam.init_state(video_path=fp)
-    out_mask_logits_initial = []
-    for frame_idx in range(num_frames):
-        input_images_frame = input_images[:, frame_idx]
+    with torch.no_grad():
+        input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
+        bs, num_frames, c, H, W = input_images.shape
+        inference_state = sam.init_state(
+            images_in=input_images.permute(1, 0, 2, 3, 4),
+            offload_video_to_cpu=False,
+            offload_state_to_cpu=False,
+        )
+    input_points = None
+    input_labels = None
+    dense_embeddings_frame = dense_embeddings[:, 0]
+    _, out_objs_ids_frame, out_mask_logits_frame_0 = sam.add_new_points_or_box(
+        inference_state=inference_state,
+        frame_idx=0,
+        obj_id=0,
+        points=input_points,
+        labels=input_labels,
+        box=None,
+        dense_embeddings_pred=dense_embeddings_frame,
+    )
+    out_mask_logits_cond = []
+    for out_frame_idx, out_obj_ids, out_mask_logits_frame in sam.propagate_in_video(inference_state):
+        out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
+        assert out_objs_ids_frame == [0]
+        out_mask_logits_cond.append(out_mask_logits_frame)
+    out_mask_logits_points = [out_mask_logits_frame_0]
+    for frame_idx in range(1, num_frames):
         dense_embeddings_frame = dense_embeddings[:, frame_idx]
-        input_points = None
-        input_labels = None
         # dense_embeddings_frame = None
         # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)]) #  cat batch_size
         # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
@@ -253,20 +269,19 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
             labels=input_labels,
             box=None,
             dense_embeddings_pred=dense_embeddings_frame,
-            # offload_video_to_cpu=False,
-            # offload_state_to_cpu=False,
             )
-        out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
-        assert out_objs_ids_frame == [0]
-        out_mask_logits_initial.append(out_mask_logits_frame)
+        # out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
+        # assert out_objs_ids_frame == [0]
+        # out_mask_logits_points.append(out_mask_logits_frame)
     out_mask_logits_final = []
     for out_frame_idx, out_obj_ids, out_mask_logits_frame in sam.propagate_in_video(inference_state):
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
         out_mask_logits_final.append(out_mask_logits_frame)
-    out_mask_logits_initial = torch.stack(out_mask_logits_initial, dim=1)
+    # out_mask_logits_cond = torch.stack(out_mask_logits_cond, dim=1)
+    # out_mask_logits_points = torch.stack(out_mask_logits_points, dim=1)
     out_mask_logits_final = torch.stack(out_mask_logits_final, dim=1)
-    return out_mask_logits_initial, None
+    return out_mask_logits_final, None
 
 
 def sam_call_v3(batched_input, sam, dense_embeddings):

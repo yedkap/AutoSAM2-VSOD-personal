@@ -122,16 +122,14 @@ def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, fr
     ds_train = DAVSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False, frame_skip=frame_skip_train)
     dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/')
     ds_val = DAVSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval)
-    dir_root_test = os.path.join(root_dir, 'DAVSOD/Validation Set/')
-    ds_test = DAVSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval)
-    return ds_train, ds_val, ds_test
+    return ds_train, ds_val
 
 
 def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None):
     """Load training and testing datasets for DAVSOD as sequences"""
-    # dir_root_test = os.path.join(root_dir, 'DAVSOD/Easy-35/')
+    dir_root_test = os.path.join(root_dir, 'DAVSOD/Easy-35/')
     # dir_root_test = os.path.join(root_dir, 'DAVSOD/Difficult-20/')
-    dir_root_test = os.path.join(root_dir, 'DAVSOD/Normal-25/')
+    # dir_root_test = os.path.join(root_dir, 'DAVSOD/Normal-25/')
     ds_test = DAVSODDataset(dir_root_test, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True)
     return ds_test
 #

@@ -292,28 +292,31 @@ class SAM2VideoPredictor(SAM2Base):
             dense_embeddings_pred=dense_embeddings_pred,
         )
         # Add the output to the output dict (to be used as future memory)
-        with torch.enable_grad():
-            obj_temp_output_dict[storage_key][frame_idx] = current_out
+        obj_ids = inference_state["obj_ids"]
+        obj_temp_output_dict[storage_key][frame_idx] = current_out
+        if inference_state["temp_output_dict_per_obj"][obj_idx]["cond_frame_outputs"].get(frame_idx, None) is not None:
+            with torch.enable_grad():
 
-            # Resize the output mask to the original video resolution
-            obj_ids = inference_state["obj_ids"]
-            assert len(obj_ids) == 1
-            video_res_masks = torch.nn.functional.interpolate(
-                inference_state["temp_output_dict_per_obj"][obj_idx]["cond_frame_outputs"].get(frame_idx, None)["pred_masks"],
-                size=(inference_state["video_height"], inference_state["video_width"]),
-                mode="bilinear",
-                align_corners=False,
-            )
-            # consolidated_out = self._consolidate_temp_output_across_obj(
-            #     inference_state,
-            #     frame_idx,
-            #     is_cond=is_cond,
-            #     consolidate_at_video_res=True,
-            # )
-            # _, video_res_masks = self._get_orig_video_res_output(
-            #     inference_state, consolidated_out["pred_masks_video_res"]
-            # )
-        return frame_idx, obj_ids, video_res_masks
+                # Resize the output mask to the original video resolution
+                assert len(obj_ids) == 1
+                video_res_masks_out = torch.nn.functional.interpolate(
+                    inference_state["temp_output_dict_per_obj"][obj_idx]["cond_frame_outputs"].get(frame_idx, None)["pred_masks"],
+                    size=(inference_state["video_height"], inference_state["video_width"]),
+                    mode="bilinear",
+                    align_corners=False,
+                )
+        else:
+            video_res_masks_out = None
+        consolidated_out = self._consolidate_temp_output_across_obj(
+            inference_state,
+            frame_idx,
+            is_cond=is_cond,
+            consolidate_at_video_res=True,
+        )
+        _, video_res_masks = self._get_orig_video_res_output(
+            inference_state, consolidated_out["pred_masks_video_res"]
+        )
+        return frame_idx, obj_ids, video_res_masks_out
 
     def add_new_points(self, *args, **kwargs):
         """Deprecated method. Please use `add_new_points_or_box` instead."""

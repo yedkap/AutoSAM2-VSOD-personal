@@ -295,10 +295,14 @@ def sam_call_v1(batched_input, sam, dense_embeddings):
 
 
 def sam_call_v2(batched_input, sam, dense_embeddings):
-    # with torch.no_grad():
-    input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
-    bs, num_frames, c, H, W = input_images.shape
-    inference_state = sam.init_state(images_in=input_images.permute(1, 0, 2, 3, 4))
+    with torch.no_grad():
+        input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
+        bs, num_frames, c, H, W = input_images.shape
+        inference_state = sam.init_state(
+            images_in=input_images.permute(1, 0, 2, 3, 4),
+            offload_video_to_cpu=False,
+            offload_state_to_cpu=False,
+        )
     # fp = r'C:\Users\atara\Documents\datasets\test_folder'
     # inference_state = sam.init_state(video_path=fp)
     out_mask_logits = []
@@ -319,8 +323,6 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
             labels=input_labels,
             box=None,
             dense_embeddings_pred=dense_embeddings_frame,
-            offload_video_to_cpu=False,
-            offload_state_to_cpu=False,
             )
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
