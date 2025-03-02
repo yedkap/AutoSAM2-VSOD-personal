@@ -317,9 +317,6 @@ def main(args=None, sam_args=None, test_run=False):
         raise Exception('unsupported task')
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
                                          num_workers=int(args['nW_eval']), drop_last=False)
-    best = 0
-    path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
-    f_best = open(path_best, 'w')
 
     inference_ds = InferenceDataset(args, test_run)
 
@@ -353,8 +350,6 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
-    folder = open_folder('results')
-    args['folder'] = folder
     args['results_root'] = os.path.join('results',
                                 'gpu' + folder,
                            )
