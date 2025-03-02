@@ -264,8 +264,9 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
         out_mask_logits_final.append(out_mask_logits_frame)
+    out_mask_logits_initial = torch.stack(out_mask_logits_initial, dim=1)
     out_mask_logits_final = torch.stack(out_mask_logits_final, dim=1)
-    return out_mask_logits_final, None
+    return out_mask_logits_initial, None
 
 
 def sam_call_v3(batched_input, sam, dense_embeddings):
