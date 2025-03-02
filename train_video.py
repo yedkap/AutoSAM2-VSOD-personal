@@ -314,7 +314,7 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
             _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
             inference_state=inference_state,
             frame_idx=frame_idx,
-            obj_id=frame_idx,
+            obj_id=0,
             points=input_points,
             labels=input_labels,
             box=None,
