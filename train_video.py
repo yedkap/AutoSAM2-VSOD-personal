@@ -51,8 +51,7 @@ def get_dice_ji(predict, target):
 
     precision = float(np.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
     recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
-    beta = 0.3
-    beta_sq = beta ** 2
+    beta_sq = 0.3
     f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (precision + recall) > 0 else 0.0
     return dice, ji, f_beta
 
