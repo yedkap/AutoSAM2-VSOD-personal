@@ -13,12 +13,13 @@ class DAVSODDataset(data.Dataset):
     DataLoader for DAVSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_root, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False):
+    def __init__(self, dir_root, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1):
         self.dir_root = dir_root
         self.len_seq = len_seq
         # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
         # self.gts = [os.path.join(gt_root, f) for f in os.listdir(gt_root) if f.endswith('.png')]
         self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if os.path.isdir(os.path.join(dir_root, d))]
+        self.frame_skip = frame_skip
 
         self.video_seqs = []
         for video_dir in self.video_dirs:
@@ -30,8 +31,8 @@ class DAVSODDataset(data.Dataset):
                 assert os.path.basename(img_file) == os.path.basename(gt_file)
 
             if cutoff is not None:
-                img_files = img_files[:cutoff]
-                mask_files = mask_files[:cutoff]
+                img_files = img_files[:(cutoff * self.frame_skip)]
+                mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
         # self.filter_files()
@@ -64,13 +65,13 @@ class DAVSODDataset(data.Dataset):
             len_seq = self.len_seq
         else:
             len_seq = len_video
-        idx_start = np.random.randint(0, len_video - len_seq + 1)
+        idx_start = np.random.randint(0, len_video - (len_seq * self.frame_skip) + 1)
 
         imgs, masks = [], []
         original_sizes, image_sizes = [], []
         self.augmentations.set_rand_params()
         for ii in range(len_seq):
-            img_path, gt_path = video['imgs'][idx_start + ii], video['masks'][idx_start + ii]
+            img_path, gt_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][idx_start + (ii * self.frame_skip)]
             image = self.cv2_loader(img_path, is_mask=False)
             mask = self.cv2_loader(gt_path, is_mask=True)
 
@@ -114,12 +115,12 @@ class DAVSODDataset(data.Dataset):
         return self.size
 
 
-def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4):
+def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, frame_skip_train=4, frame_skip_eval=4):
     """Load training and testing datasets for DAVSOD as sequences"""
     dir_root_train = os.path.join(root_dir, 'DAVSOD/Training Set/')
-    ds_train = DAVSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False)
+    ds_train = DAVSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False, frame_skip=frame_skip_train)
     dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/')
-    ds_test = DAVSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True)
+    ds_test = DAVSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval)
     return ds_train, ds_test
 #
 #
