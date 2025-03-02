@@ -347,6 +347,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
+    parser.add_argument('-folder', '--folder', help='image size', required=True)
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
@@ -357,7 +358,8 @@ if __name__ == '__main__':
                            )
     args['path'] = os.path.join(args['results_root'],
                                 'net_last.pth')
-    args['path_best'] = os.path.join(args['results_root'],
+    args['path_best'] = os.path.join('results',
+                                     'gpu' + str(args['folder']),
                                      'net_best.pth')
     args['path_occasional'] = os.path.join(args['results_root'],
                                      'net_epoch_{}.pth')
