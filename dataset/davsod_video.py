@@ -31,9 +31,7 @@ class DAVSODDataset(data.Dataset):
                 assert os.path.basename(img_file) == os.path.basename(gt_file)
 
             if cutoff is not None:
-                print(len(img_files))
                 img_files = img_files[:(cutoff * self.frame_skip)]
-                print(len(img_files))
                 mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
@@ -74,8 +72,6 @@ class DAVSODDataset(data.Dataset):
         original_sizes, image_sizes = [], []
         self.augmentations.set_rand_params()
         for ii in range(len_seq):
-            print(idx_start + (ii * self.frame_skip))
-            print(len(video['imgs']))
             img_path, gt_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][idx_start + (ii * self.frame_skip)]
             image = self.cv2_loader(img_path, is_mask=False)
             mask = self.cv2_loader(gt_path, is_mask=True)
