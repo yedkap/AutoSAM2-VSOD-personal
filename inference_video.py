@@ -7,7 +7,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
-from dataset.davsod_video import get_davsod_dataset
+from dataset.davsod_video import get_davsod_dataset_test
 from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2, build_sam2_video_predictor
@@ -132,70 +132,6 @@ def call_model(model, model_input, device):
 
     return outputs
 
-class Trainer(torch.utils.data.Dataset):
-    def __init__(self, args, test_run=False):
-        self.train_root = args['root_images_train']
-        self.Idim = int(args['Idim'])
-        self.test_run = test_run
-        self.num_outputs = 3
-
-    def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps, test_run=False):
-        num_images = len(ds)
-        denom = num_images // self.num_outputs
-        loss_list = []
-        pbar = tqdm(ds)
-        criterion = nn.BCELoss()
-        optimizer.zero_grad()
-        train_dir = os.path.join(self.train_root, str(epoch))
-        if not os.path.isdir(train_dir):
-            os.mkdir(train_dir)
-        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
-            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
-
-            assert torch.all(original_szs == original_szs[0, 0])
-            assert torch.all(img_szs == img_szs[0, 0])
-            img_sz = img_szs[:, 0]
-            original_sz = original_szs[:, 0]
-
-            orig_imgs = imgs.to(device)
-            gts = gts.to(device)
-            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
-            orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
-            if SAM_VERSION == 1:
-                dense_embeddings = model(orig_imgs_small)
-            else:
-                dense_embeddings = call_model(model, orig_imgs_small, device=device)
-            batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-            masks, masks_gt = sam_call(batched_input, sam, dense_embeddings)
-            masks = unpad(masks, original_sz)
-            masks = norm_batch(masks)
-            if masks_gt is not None:
-                # gts = norm_batch(masks_gt)
-                masks_gt[masks_gt > 0.] = 1
-                masks_gt[masks_gt <= 0.] = 0
-                gts = masks_gt.float()
-            gts = unpad(gts, original_sz)
-            loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=accumulation_steps, step=ii)
-            loss_list.append(loss)
-            pbar.set_description(
-                '(train | {}) epoch {epoch} ::'
-                ' loss {loss:.4f}'.format(
-                    'VSOD',
-                    epoch=epoch,
-                    loss=np.mean(loss_list)
-                ))
-            if ii % denom == 0:
-                save_image(unpad(orig_imgs[0, 0], original_sz), f'{train_dir}/{ii}_0_image_in.png', is_mask=False)
-                save_image(gts[0, 0], f'{train_dir}/{ii}_0_gt_mask.png', is_mask=True)
-                save_image(masks[0, 0], f'{train_dir}/{ii}_0_pred_mask.png', is_mask=True)
-                save_image(unpad(orig_imgs[0, 1], original_sz), f'{train_dir}/{ii}_1_image_in.png', is_mask=False)
-                save_image(gts[0, 1], f'{train_dir}/{ii}_1_gt_mask.png', is_mask=True)
-                save_image(masks[0, 1], f'{train_dir}/{ii}_1_pred_mask.png', is_mask=True)
-
-            if test_run:
-                break
-        return np.mean(loss_list)
-
 
 class InferenceDataset(torch.utils.data.Dataset):
     def __init__(self, args, test_run=False):
@@ -258,12 +194,10 @@ class InferenceDataset(torch.utils.data.Dataset):
                     iou=np.mean(iou_list),
                     f_beta=np.mean(f_beta_list)))
 
-            if ii % denom == 0:
-                for idx_frame in range(seq_len):
-                    if idx_frame % 8 == 0:
-                        save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{idx_frame}_0_image_in.png', is_mask=False)
-                        save_image(gts[0, idx_frame], f'{eval_dir}/{idx_frame}_0_gt_mask.png', is_mask=True)
-                        save_image(masks[0, idx_frame], f'{eval_dir}/{idx_frame}_0_pred_mask.png', is_mask=True)
+            for idx_frame in range(seq_len):
+                save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
+                save_image(gts[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_gt_mask.png', is_mask=True)
+                save_image(masks[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_pred_mask.png', is_mask=True)
 
             if self.test_run:
                 break
@@ -376,35 +310,19 @@ def main(args=None, sam_args=None, test_run=False):
                                lr=float(args['learning_rate']),
                                weight_decay=float(args['WD']))        
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
+        testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'])
     else:
         raise Exception('unsupported task')
-    ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
-                                     num_workers=int(args['nW']), drop_last=True)
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
                                          num_workers=int(args['nW_eval']), drop_last=False)
     best = 0
     path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
     f_best = open(path_best, 'w')
 
-    trainer = Trainer(args, test_run)
     inference_ds = InferenceDataset(args, test_run)
 
-    for epoch in range(int(args['epoches'])):
-        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
-        if epoch % int(args['save_every']) == 0:
-            torch.save(model, args['path_occasional'].format(epoch))
-        if epoch % 20 == 0:
-            with torch.no_grad():
-                IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
-                if IoU_val > best:
-                    torch.save(model, args['path_best'])
-                    best = IoU_val
-                    print('best results: ' + str(best))
-                    f_best.write(str(epoch) + ',' + str(best) + '\n')
-                    f_best.flush()
-            if test_run:
-                break
+    with torch.no_grad():
+        IoU_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
 
 
 if __name__ == '__main__':
