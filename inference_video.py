@@ -291,6 +291,8 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
     model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+    model1 = torch.load(args['path_best'])
+    model.load_state_dict(model1.state_dict())
     if SAM_VERSION == 1:
         sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
         transform = ResizeLongestSide_sam1(sam.image_encoder.img_size)
