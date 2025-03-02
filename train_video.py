@@ -367,9 +367,14 @@ def main(args=None, sam_args=None, test_run=False):
         assert not sam.training
         # sam = SAM2ImagePredictor(build_sam2(model_cfg, sam_args['checkpoint'], device=device))
         transform = None
-    optimizer = optim.Adam(model.parameters(),
-                           lr=float(args['learning_rate']),
-                           weight_decay=float(args['WD']))
+    if args['decoder_only']:
+        optimizer = optim.Adam(model.decoder.parameters(),
+                               lr=float(args['learning_rate']),
+                               weight_decay=float(args['WD']))
+    else:
+        optimizer = optim.Adam(model.parameters(),
+                               lr=float(args['learning_rate']),
+                               weight_decay=float(args['WD']))        
     if args['task'] == 'davsod':
         trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
     else:
@@ -423,6 +428,7 @@ if __name__ == '__main__':
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
     parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
+    parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
