@@ -61,7 +61,7 @@ def open_folder(path):
         os.mkdir(path)
     a = os.listdir(path)
     os.mkdir(path + '/gpu' + str(len(a)))
-    return str(len(a))
+    return (path + '/gpu' + str(len(a)))
 
 
 def gen_step(optimizer, gts, masks, criterion, accumulation_steps, step):
@@ -291,7 +291,7 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
     model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
-    model1 = torch.load(args['path_best'])
+    model1 = torch.load(args['path_best'], weights_only=False)
     model.load_state_dict(model1.state_dict())
     if SAM_VERSION == 1:
         sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
@@ -349,17 +349,12 @@ if __name__ == '__main__':
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     args = vars(parser.parse_args())
 
-    os.makedirs('results', exist_ok=True)
-    args['results_root'] = os.path.join('results',
-                                'gpu' + folder,
-                           )
-    args['path'] = os.path.join(args['results_root'],
-                                'net_last.pth')
+    os.makedirs('results_test', exist_ok=True)
+    folder_load = args['folder']
+    args['results_root'] = open_folder('results_test')
     args['path_best'] = os.path.join('results',
                                      'gpu' + str(args['folder']),
                                      'net_best.pth')
-    args['path_occasional'] = os.path.join(args['results_root'],
-                                     'net_epoch_{}.pth')
     args['root_images_eval'] = os.path.join(args['results_root'],
                                      'eval_images')
     args['root_images_train'] = os.path.join(args['results_root'],
