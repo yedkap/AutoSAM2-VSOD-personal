@@ -63,9 +63,10 @@ class DAVSODDataset(data.Dataset):
         if self.len_seq and self.len_seq < np.inf:
             assert len_video >= self.len_seq
             len_seq = self.len_seq
+            idx_start = np.random.randint(0, len_video - (len_seq * self.frame_skip) + 1)
         else:
             len_seq = len_video
-        idx_start = np.random.randint(0, len_video - (len_seq * self.frame_skip) + 1)
+            idx_start = 0
 
         imgs, masks = [], []
         original_sizes, image_sizes = [], []
