@@ -319,6 +319,8 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
             labels=input_labels,
             box=None,
             dense_embeddings_pred=dense_embeddings_frame,
+            offload_video_to_cpu=False,
+            offload_state_to_cpu=False,
             )
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
