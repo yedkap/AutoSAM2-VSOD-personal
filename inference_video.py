@@ -331,7 +331,10 @@ def main(args=None, sam_args=None, test_run=False):
                                lr=float(args['learning_rate']),
                                weight_decay=float(args['WD']))        
     if args['task'] == 'davsod':
-        testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'])
+        testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], dataset=args['dataset'])
+    elif args['task'] == 'vidsod':
+        raise Exception("vidsod not yet supported.")
+        # testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'])
     else:
         raise Exception('unsupported task')
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
@@ -366,6 +369,7 @@ if __name__ == '__main__':
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     parser.add_argument('-folder', '--folder', help='image size', required=True)
+    parser.add_argument('--dataset', default='easy', , help='test dataset. easy, normal, hard, vidsod')
     args = vars(parser.parse_args())
 
     os.makedirs('results_test', exist_ok=True)
