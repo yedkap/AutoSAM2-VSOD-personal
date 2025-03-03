@@ -369,7 +369,7 @@ if __name__ == '__main__':
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     parser.add_argument('-folder', '--folder', help='image size', required=True)
-    parser.add_argument('--dataset', default='easy', , help='test dataset. easy, normal, hard, vidsod')
+    parser.add_argument('--dataset', default='easy', help='test dataset. easy, normal, hard, vidsod')
     args = vars(parser.parse_args())
 
     os.makedirs('results_test', exist_ok=True)
