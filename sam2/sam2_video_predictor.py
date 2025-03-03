@@ -307,15 +307,16 @@ class SAM2VideoPredictor(SAM2Base):
                 )
         else:
             video_res_masks_out = None
-        consolidated_out = self._consolidate_temp_output_across_obj(
-            inference_state,
-            frame_idx,
-            is_cond=is_cond,
-            consolidate_at_video_res=True,
-        )
-        _, video_res_masks = self._get_orig_video_res_output(
-            inference_state, consolidated_out["pred_masks_video_res"]
-        )
+        if bs == 1:
+            consolidated_out = self._consolidate_temp_output_across_obj(
+                inference_state,
+                frame_idx,
+                is_cond=is_cond,
+                consolidate_at_video_res=True,
+            )
+            _, video_res_masks = self._get_orig_video_res_output(
+                inference_state, consolidated_out["pred_masks_video_res"]
+            )
         return frame_idx, obj_ids, video_res_masks_out
 
     def add_new_points(self, *args, **kwargs):
