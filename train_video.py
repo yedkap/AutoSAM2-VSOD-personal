@@ -444,7 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
-    parser.add_argument('--learning_rate_decay', default=True, type=bool, help='refresh object ID in each frame')
+    parser.add_argument('--lr_decay', default=True, type=bool, help='refresh object ID in each frame')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
