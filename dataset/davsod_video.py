@@ -125,12 +125,24 @@ def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, fr
     return ds_train, ds_val
 
 
-def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None):
-    """Load training and testing datasets for DAVSOD as sequences"""
-    # dir_root_test = os.path.join(root_dir, 'DAVSOD/Easy-35/')
-    # dir_root_test = os.path.join(root_dir, 'DAVSOD/Difficult-20/')
-    dir_root_test = os.path.join(root_dir, 'DAVSOD/Normal-25/')
-    ds_test = DAVSODDataset(dir_root_test, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True)
+def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset='easy'):
+    """Load a DAVSOD test dataset as sequences."""    
+    dataset_map = {
+        'easy': 'Easy-35',
+        'normal': 'Normal-25',
+        'hard': 'Difficult-20'
+    }
+    
+    if dataset not in dataset_map:
+        raise ValueError(f"Invalid dataset selection: {dataset}. Choose from 'easy', 'normal', or 'hard'.")
+    
+    dir_root_test = os.path.join(root_dir, f'DAVSOD/{dataset_map[dataset]}/')
+    
+    ds_test = DAVSODDataset(
+        dir_root_test, train=False, sam_trans=sam_trans, 
+        cutoff=cutoff_eval, len_seq=np.inf, is_eval=True
+    )
+    
     return ds_test
 #
 #
