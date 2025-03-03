@@ -144,18 +144,3 @@ def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset=
     )
     
     return ds_test
-#
-#
-# def get_tests_davsod_dataset(sam_trans):
-#     """Load DAVSOD test datasets from different sources"""
-#     transform_train, transform_test = get_davsod_transform()
-#
-#     datasets = {}
-#     test_sets = ['DAVSOD-Easy', 'DAVSOD-Medium', 'DAVSOD-Hard']
-#     for test_set in test_sets:
-#         image_root = f'DAVSOD/TestDataset/{test_set}/images/'
-#         gt_root = f'DAVSOD/TestDataset/{test_set}/masks/'
-#         datasets[test_set] = DAVSODDataset(image_root, gt_root, augmentations=transform_test, train=False,
-#                                            sam_trans=sam_trans)
-#
-#     return datasets
