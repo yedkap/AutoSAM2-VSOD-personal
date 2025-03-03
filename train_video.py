@@ -378,7 +378,14 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         optimizer = optim.Adam(model.parameters(),
                                lr=float(args['learning_rate']),
-                               weight_decay=float(args['WD']))        
+                               weight_decay=float(args['WD']))
+    if args['learning_rate_decay']:
+        print('using learning rate decay')
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=1/3)
+    else:
+        print('using constant learning rate')
+        scheduler = None
+        
     if args['task'] == 'davsod':
         trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
     else:
@@ -395,7 +402,10 @@ def main(args=None, sam_args=None, test_run=False):
     inference_ds = InferenceDataset(args, test_run)
 
     for epoch in range(int(args['epoches'])):
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f'learning rage: {current_lr}')
         trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        scheduler.step()
         if epoch % int(args['save_every']) == 0:
             torch.save(model, args['path_occasional'].format(epoch))
         if epoch % 20 == 0:
@@ -434,6 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
+    parser.add_argument('--learning_rate_decay', default=True, type=bool, help='refresh object ID in each frame')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
