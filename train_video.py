@@ -411,10 +411,10 @@ def main(args=None, sam_args=None, test_run=False):
             torch.save(model, args['path_occasional'].format(epoch))
         if epoch % 20 == 0:
             with torch.no_grad():
-                f_beta_list = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
-                if f_beta_list > best:
+                f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
+                if f_beta_val > best:
                     torch.save(model, args['path_best'])
-                    best = f_beta_list
+                    best = f_beta_val
                     print('best results: ' + str(best))
                     f_best.write(str(epoch) + ',' + str(best) + '\n')
                     f_best.flush()
