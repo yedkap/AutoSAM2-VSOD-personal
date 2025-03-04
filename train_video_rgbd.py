@@ -270,9 +270,9 @@ class InferenceDataset(torch.utils.data.Dataset):
             if ii % denom == 0:
                 for idx_frame in range(seq_len):
                     if idx_frame % 8 == 0:
-                        save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{idx_frame}_0_image_in.png', is_mask=False)
-                        save_image(gts[0, idx_frame], f'{eval_dir}/{idx_frame}_0_gt_mask.png', is_mask=True)
-                        save_image(masks[0, idx_frame], f'{eval_dir}/{idx_frame}_0_pred_mask.png', is_mask=True)
+                        save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
+                        save_image(gts[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_gt_mask.png', is_mask=True)
+                        save_image(masks[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_pred_mask.png', is_mask=True)
 
             if self.test_run:
                 break
