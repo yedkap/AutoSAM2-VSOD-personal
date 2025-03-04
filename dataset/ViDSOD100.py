@@ -14,13 +14,16 @@ class VIDSODDataset(data.Dataset):
     DataLoader for VIDSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_root, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1):
+    def __init__(self, dir_root, video_dirs=None, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1):
         self.dir_root = dir_root
         self.len_seq = len_seq
         # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
         # self.gts = [os.path.join(gt_root, f) for f in os.listdir(gt_root) if f.endswith('.png')]
-        self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if
-                           os.path.isdir(os.path.join(dir_root, d))]
+        if video_dirs is None:
+            self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if
+                               os.path.isdir(os.path.join(dir_root, d))]
+        else:
+            self.video_dirs = video_dirs
         self.frame_skip = frame_skip
 
         self.video_seqs = []
@@ -133,16 +136,25 @@ def get_vidsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, fr
     """Load training and testing datasets for DAVSOD as sequences"""
     # dir_root_train = os.path.join(root_dir, r"VIDSOD100\vidsod_100\vidsod_100\train\train")
     dir_root_train = os.path.join(root_dir, r"vidsod100/train/train")
-    ds_train = VIDSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False,
-                             frame_skip=frame_skip_train)
-    total_size = len(ds_train)
+
+    video_dirs_all = [
+        os.path.join(dir_root_train, d) for d in os.listdir(dir_root_train) if
+        os.path.isdir(os.path.join(dir_root_train, d))
+    ]
+
+    video_dirs_all = sorted(video_dirs_all)
+    total_size = len(video_dirs_all)
     size_val = int(0.15 * total_size)
     size_train = total_size - size_val
-    ds_train, ds_val = random_split(ds_train, [size_train, size_val])
 
-    # dir_root_val = os.path.join(root_dir, r"vidsod100\test\test")
-    # ds_val = VIDSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf,
-    #                        is_eval=True, frame_skip=frame_skip_eval)
+    video_dirs_train, video_dirs_val = video_dirs_all[:size_train], video_dirs_all[size_train:]
+
+    ds_train = VIDSODDataset(dir_root_train, video_dirs=video_dirs_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False,
+                             frame_skip=frame_skip_train)
+    ds_val = VIDSODDataset(dir_root_train, video_dirs=video_dirs_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf,
+                           is_eval=True, frame_skip=frame_skip_eval)
+
+
     return ds_train, ds_val
 
 
