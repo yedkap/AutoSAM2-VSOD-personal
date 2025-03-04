@@ -715,8 +715,6 @@ class ImageEncoderRGB_D(nn.Module):
 
         #out = self.context_module(fuse)
         #out = self.decoder(enc_outs=[out, skip3, skip2, skip1])
-        print(rgb.shape)
-        print(depth.shape)
         out=fuse
 
         skip1_upscaled=F.interpolate(skip1, size=(128, 128), mode='bilinear', align_corners=False)
