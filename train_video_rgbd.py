@@ -8,6 +8,7 @@ import numpy as np
 from models.model_single import ModelEmb
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset
+from dataset.ViDSOD100 import get_vidsod_dataset
 from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2, build_sam2_video_predictor
@@ -115,18 +116,19 @@ def unpad(mask, original_size):
     return mask
 
 
-def call_model(model, model_input, device):
+def call_model(model, model_input_rgb,model_input_depth, device):
     # Define pixel mean and std as tensors
     pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
     # Normalize the input
-    normalized_input = (model_input - pixel_mean) / pixel_std
+    normalized_input = (model_input_rgb - pixel_mean) / pixel_std
 
-    num_frames = model_input.shape[1]
+    num_frames = model_input_rgb.shape[1]
     outputs = []
     for idx_frame in range(num_frames):
         normalized_input_frame = normalized_input[:, idx_frame]
-        output = model(normalized_input_frame)
+        depth_frame= model_input_depth[:,idx_frame]
+        output = model(normalized_input_frame, depth_frame)
         outputs.append(output)
     outputs = torch.stack(outputs, dim=1)
 
@@ -149,7 +151,7 @@ class Trainer(torch.utils.data.Dataset):
         train_dir = os.path.join(self.train_root, str(epoch))
         if not os.path.isdir(train_dir):
             os.mkdir(train_dir)
-        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
+        for ii, (imgs, gts, depth, original_szs, img_szs) in enumerate(pbar):
             batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
 
             assert torch.all(original_szs == original_szs[0, 0])
@@ -159,12 +161,16 @@ class Trainer(torch.utils.data.Dataset):
 
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
+            depth_imgs=depth.to(device)
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                            align_corners=True)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
             if SAM_VERSION == 1:
-                dense_embeddings = model(orig_imgs_small)
+                dense_embeddings = model(orig_imgs_small, depth_imgs_small) ##add depth
             else:
-                dense_embeddings = call_model(model, orig_imgs_small, device=device)
+                dense_embeddings = call_model(model, orig_imgs_small,depth_imgs_small, device=device) ##add depth
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, masks_gt = sam_call(batched_input, sam, dense_embeddings)
             masks = unpad(masks, original_sz)
@@ -216,22 +222,25 @@ class InferenceDataset(torch.utils.data.Dataset):
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
-        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
+        for ii, (imgs, gts,depth, original_szs, img_szs) in enumerate(pbar):
             batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
-
+            depth_imgs=depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                            align_corners=True)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
             if SAM_VERSION == 1:
-                dense_embeddings = model(orig_imgs_small)
+                dense_embeddings = model(orig_imgs_small, depth_imgs_small)  ##add depth
             else:
-                dense_embeddings = call_model(model, orig_imgs_small, device=device)
+                dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings)
             masks = norm_batch(masks)
@@ -379,7 +388,7 @@ def main(args=None, sam_args=None, test_run=False):
         optimizer = optim.Adam(model.parameters(),
                                lr=float(args['learning_rate']),
                                weight_decay=float(args['WD']))
-    if args['lr_decay']:
+    if args['lr_decay']: #used to be if args['learning_rate_decay']:
         print('using learning rate decay')
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=1/3)
     else:
@@ -388,6 +397,10 @@ def main(args=None, sam_args=None, test_run=False):
         
     if args['task'] == 'davsod':
         trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
+    elif args['task'] == 'VIDSOD':
+        trainset, testset = get_vidsod_dataset(args['root_data_dir'], sam_trans=transform,
+                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
+
     else:
         raise Exception('unsupported task')
     ds = torch.utils.data.DataLoader(trainset, batch_size=int(args['Batch_size']), shuffle=True,
@@ -433,7 +446,7 @@ if __name__ == '__main__':
     parser.add_argument('-nW', '--nW', default=0, help='num workers train', required=False)
     parser.add_argument('-nW_eval', '--nW_eval', default=0, help='num workers eval', required=False)
     parser.add_argument('-WD', '--WD', default=0, help='weight decay', required=False)  # 1e-4
-    parser.add_argument('-task', '--task', default='davsod', help='segmenatation task type', required=False)
+    parser.add_argument('-task', '--task', default='VIDSOD', help='segmenatation task type', required=False)
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=512, help='image size', required=False)
@@ -444,7 +457,8 @@ if __name__ == '__main__':
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
     parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
-    parser.add_argument('--lr_decay', default=True, type=bool, help='refresh object ID in each frame')
+    parser.add_argument('--lr_decay', default=False, type=bool, help='refresh object ID in each frame')
+    parser.add_argument('--seed', default=0, type=int, help='random seed.')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)
@@ -465,6 +479,9 @@ if __name__ == '__main__':
                                      'train_images')
     os.mkdir(args['root_images_eval'])
     os.mkdir(args['root_images_train'])
+
+    torch.manual_seed(args['seed'])
+
     if SAM_VERSION == 1:
         sam_args = {
             'sam_checkpoint': "cp_sam1/sam_vit_h.pth",
