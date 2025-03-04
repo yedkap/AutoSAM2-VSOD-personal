@@ -132,7 +132,7 @@ class VIDSODDataset(data.Dataset):
 def get_vidsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, frame_skip_train=4, frame_skip_eval=4):
     """Load training and testing datasets for DAVSOD as sequences"""
     # dir_root_train = os.path.join(root_dir, r"VIDSOD100\vidsod_100\vidsod_100\train\train")
-    dir_root_train = os.path.join(root_dir, r"vidsod100\train\train")
+    dir_root_train = os.path.join(root_dir, r"vidsod100/train/train")
     ds_train = VIDSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False,
                              frame_skip=frame_skip_train)
     total_size = len(ds_train)
