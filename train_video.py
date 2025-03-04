@@ -405,7 +405,8 @@ def main(args=None, sam_args=None, test_run=False):
         current_lr = optimizer.param_groups[0]['lr']
         print(f'learning rate: {current_lr}')
         trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
         if epoch % int(args['save_every']) == 0:
             torch.save(model, args['path_occasional'].format(epoch))
         if epoch % 20 == 0:
