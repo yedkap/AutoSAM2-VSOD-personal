@@ -220,8 +220,8 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         bs, num_frames, c, H, W = input_images.shape
         inference_state = sam.init_state(
             images_in=input_images.permute(1, 0, 2, 3, 4),
-            offload_video_to_cpu=True,
-            offload_state_to_cpu=True,
+            offload_video_to_cpu=False,
+            offload_state_to_cpu=False,
         )
     input_points = None
     input_labels = None
