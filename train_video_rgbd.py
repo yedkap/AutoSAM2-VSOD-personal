@@ -317,7 +317,7 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
     out_mask_logits = []
     for frame_idx in range(num_frames):
         input_images_frame = input_images[:, frame_idx]
-        dense_embeddings_frame = dense_embeddings[:, frame_idx]
+        dense_embeddings_frame = dense_embeddings[:, frame_idx].to(device=device)
         input_points = None
         input_labels = None
         # dense_embeddings_frame = None
