@@ -161,7 +161,7 @@ class Trainer(torch.utils.data.Dataset):
 
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            depth_imgs=depth.to(device)
+            depth_imgs = depth.to(device)
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
