@@ -242,7 +242,9 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         out_mask_logits_cond.append(out_mask_logits_frame)
     out_mask_logits_points = [out_mask_logits_frame_0]
     for frame_idx in range(1, num_frames):
+        print(device)
         dense_embeddings_frame = dense_embeddings[:, frame_idx].to(device=device)
+        print(dense_embeddings_frame.device)
         # dense_embeddings_frame = None
         # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)]) #  cat batch_size
         # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size

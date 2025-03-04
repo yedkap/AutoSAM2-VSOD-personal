@@ -172,7 +172,7 @@ class Trainer(torch.utils.data.Dataset):
             else:
                 dense_embeddings = call_model(model, orig_imgs_small,depth_imgs_small, device=device) ##add depth
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-            masks, masks_gt = sam_call(batched_input, sam, dense_embeddings)
+            masks, masks_gt = sam_call(batched_input, sam, dense_embeddings, device)
             masks = unpad(masks, original_sz)
             masks = norm_batch(masks)
             if masks_gt is not None:
@@ -280,30 +280,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         return np.mean(f_beta_list)
 
 
-def sam_call(batched_input, sam, dense_embeddings):
-    if SAM_VERSION == 1:
-        low_res_masks, low_res_masks_gt = sam_call_v1(batched_input, sam, dense_embeddings)
-    else:
-        low_res_masks, low_res_masks_gt = sam_call_v2(batched_input, sam, dense_embeddings)
-    return low_res_masks, low_res_masks_gt
-
-
-def sam_call_v1(batched_input, sam, dense_embeddings):
-    with torch.no_grad():
-        input_images = torch.stack([sam.preprocess(x["image"]) for x in batched_input], dim=0)
-        image_embeddings = sam.image_encoder(input_images)
-        sparse_embeddings_none, dense_embeddings_none = sam.prompt_encoder(points=None, boxes=None, masks=None)
-    low_res_masks, iou_predictions = sam.mask_decoder(
-        image_embeddings=image_embeddings,
-        image_pe=sam.prompt_encoder.get_dense_pe(),
-        sparse_prompt_embeddings=sparse_embeddings_none,
-        dense_prompt_embeddings=dense_embeddings,
-        multimask_output=False,
-    )
-    return low_res_masks, None
-
-
-def sam_call_v2(batched_input, sam, dense_embeddings):
+def sam_call(batched_input, sam, dense_embeddings, device):
     with torch.no_grad():
         input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
         bs, num_frames, c, H, W = input_images.shape
@@ -342,26 +319,6 @@ def sam_call_v2(batched_input, sam, dense_embeddings):
         #                                                       multimask_output=False, return_logits=True)
     out_mask_logits = torch.stack(out_mask_logits, dim=1)
     return out_mask_logits, None
-
-
-def sam_call_v3(batched_input, sam, dense_embeddings):
-    with torch.no_grad():
-        input_images = [x["image"].squeeze(0).permute((1, 2, 0)).cpu().numpy() / 255 for x in batched_input]
-        bs = len(input_images)
-        H, W, c = input_images[0].shape[-3:]
-        sam.set_image_batch(input_images)
-    dense_embeddings_frame = dense_embeddings.squeeze(1)
-    input_points = None
-    input_labels = None
-    # dense_embeddings = None
-    # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)])  # cat batch_size
-    # input_labels = np.array([[1] for _ in range(bs)])  # cat batch_size
-    low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
-                                                          point_coords_batch=input_points,
-                                                          point_labels_batch=input_labels,
-                                                          multimask_output=False, return_logits=True)
-    low_res_masks = torch.stack(low_res_masks, dim=0).unsqueeze(1)
-    return low_res_masks, None
 
 
 def main(args=None, sam_args=None, test_run=False):
