@@ -139,7 +139,7 @@ class ModelEmb(nn.Module):
         self.size_out = size_out
         self.train_decoder_only = train_decoder_only
 
-    def forward(self, img, size=None):
+    def forward(self, img):
         if self.train_decoder_only:
             with torch.no_grad():
                 z = self.backbone(img)
