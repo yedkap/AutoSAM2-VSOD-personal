@@ -151,9 +151,9 @@ class ModelEmb(nn.Module):
         #print(gray_img.shape)
         if self.train_decoder_only:
             with torch.no_grad():
-                z = self.backbone(img)
+                z = self.backbone(img, depth_image)
         else:
-            z = self.backbone(img)
+            z = self.backbone(img, depth_image)
         dense_embeddings = self.decoder(z)
         dense_embeddings = F.interpolate(dense_embeddings, (64, 64), mode='bilinear', align_corners=True)
         return dense_embeddings
