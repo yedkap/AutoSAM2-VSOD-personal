@@ -32,13 +32,16 @@ def norm_batch(x):
 
 
 def Dice_loss(y_true, y_pred, smooth=1):
-    alpha = 0.5
-    beta = 0.5
     tp = torch.sum(y_true * y_pred, dim=(1, 2, 3))
     fn = torch.sum(y_true * (1 - y_pred), dim=(1, 2, 3))
     fp = torch.sum((1 - y_true) * y_pred, dim=(1, 2, 3))
-    tversky_class = (tp + smooth) / (tp + alpha * fn + beta * fp + smooth)
-    return 1 - torch.mean(tversky_class)
+
+    precision = (torch.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
+    recall = (torch.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
+    beta_sq = 0.3
+    f_beta = (torch.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (precision + recall) > 0 else 0.0
+
+    return 1 - torch.mean(f_beta)
 
 
 def get_dice_ji(predict, target):
@@ -242,7 +245,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             else:
                 dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-            masks, _ = sam_call(batched_input, sam, dense_embeddings)
+            masks, _ = sam_call(batched_input, sam, dense_embeddings, device=device)
             masks = norm_batch(masks)
             # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
             # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
