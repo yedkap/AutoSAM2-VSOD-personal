@@ -36,8 +36,8 @@ def Dice_loss(y_true, y_pred, smooth=1):
     fn = torch.sum(y_true * (1 - y_pred), dim=(1, 2, 3))
     fp = torch.sum((1 - y_true) * y_pred, dim=(1, 2, 3))
 
-    precision = (torch.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
-    recall = (torch.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
+    precision = (torch.nan_to_num(tp / (tp + fp + smooth)))
+    recall = (torch.nan_to_num(tp / (tp + fn + smooth)))
     beta_sq = 0.3
     f_beta = (torch.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth)))
 
