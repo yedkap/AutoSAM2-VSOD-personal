@@ -91,13 +91,14 @@ class VIDSODDataset(data.Dataset):
             mask = self.cv2_loader(gt_path, is_mask=True)
             depth = self.cv2_loader(depth_path, is_mask=False, is_depth=True) #changed is_mask to True
 
+            depth_min = np.min(depth)
+            depth_max = np.max(depth)
+            depth = (depth - depth_min) / (depth_max - depth_min) * 255
+
             img = self.augmentations.transform(image, is_mask=False) * 255
             mask = self.augmentations.transform(mask * 255, is_mask=True)
-            depth = self.augmentations.transform(depth, is_mask=True) * 255
+            depth = self.augmentations.transform(depth, is_mask=True) * 1
 
-            depth_min = torch.min(depth[depth != 0])
-            depth_max = torch.max(depth[depth != 0])
-            depth = (depth - depth_min) / (depth_max - depth_min)
 
             original_sizes.append(img.shape[-2:])
             mask[mask > 0.5] = 1
