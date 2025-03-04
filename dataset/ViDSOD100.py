@@ -22,6 +22,7 @@ class VIDSODDataset(data.Dataset):
         if video_dirs is None:
             self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if
                                os.path.isdir(os.path.join(dir_root, d))]
+            self.video_dirs = sorted(self.video_dirs)
         else:
             self.video_dirs = video_dirs
         self.frame_skip = frame_skip
