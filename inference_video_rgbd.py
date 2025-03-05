@@ -36,7 +36,7 @@ def Dice_loss(y_true, y_pred, smooth=1):
 
 def get_dice_ji(predict_scores, target, smooth=1e-8):
     # thresholds = np.linspace(0, 1, 21)
-    thresholds = [2/3]
+    thresholds = [1/2]
     max_f_beta = 0
     for thresh in thresholds:
         predict = predict_scores.copy()
