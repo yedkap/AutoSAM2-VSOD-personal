@@ -131,6 +131,7 @@ class Model(nn.Module):
 class ModelEmb(nn.Module):
     def __init__(self, args, size_out=64, train_decoder_only=False):
         super(ModelEmb, self).__init__()
+        print('using HarDNet backbone')
         self.backbone = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         d, f = self.backbone.full_features, self.backbone.features
         self.decoder = SmallDecoder(d, out=256)

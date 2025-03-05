@@ -132,6 +132,7 @@ class Model(nn.Module):
 class ModelEmb(nn.Module):
     def __init__(self, args,size_out=64, train_decoder_only=None):#add a check for decoder only?
         super(ModelEmb, self).__init__()
+        print('using RGBD backbone')
         self.backbone = ImageEncoderRGB_D(
             pretrained=True
         )

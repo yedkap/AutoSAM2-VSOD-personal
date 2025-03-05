@@ -415,18 +415,21 @@ if __name__ == '__main__':
     parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=512, help='image size', required=False)
-    parser.add_argument('--test_run', default=False, type=bool, help='if True, stops all train / eval loops after single iteration / input', required=False)
+    parser.add_argument('--test_run', default=0, type=int, help='if True, stops all train / eval loops after single iteration / input', required=False)
     parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
     parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
-    parser.add_argument('--decoder_only', default=False, type=bool, help='update only ModelEmb decoder')
-    parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
-    parser.add_argument('--lr_decay', default=False, type=bool, help='refresh object ID in each frame')
+    parser.add_argument('--decoder_only', default=1, type=int, help='update only ModelEmb decoder')
+    parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
-    parser.add_argument('--use_depth', default=True, type=bool, help='If true, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     args = vars(parser.parse_args())
 
+    args['decoder_only'] = args['decoder_only'] == 1
+    args['use_depth'] = args['use_depth'] == 1
+    args['lr_decay'] = args['lr_decay'] == 1
+    args['test_run'] = args['test_run'] == 1
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
     args['folder'] = folder
