@@ -186,8 +186,8 @@ class InferenceDataset(torch.utils.data.Dataset):
                    gts.squeeze().detach().cpu().numpy().astype(np.float32)
             )
 
-            masks[masks > 0.5] = 1
-            masks[masks <= 0.5] = 0
+            masks[masks > 2/3] = 1
+            masks[masks <= 2/3] = 0
             dice, ji, f_beta = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             iou_list.append(ji)
