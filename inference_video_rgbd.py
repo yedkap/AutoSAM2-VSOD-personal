@@ -35,7 +35,8 @@ def Dice_loss(y_true, y_pred, smooth=1):
 
 
 def get_dice_ji(predict_scores, target, smooth=1e-8):
-    thresholds = np.linspace(0, 1, 21)
+    # thresholds = np.linspace(0, 1, 21)
+    thresholds = [2/3]
     max_f_beta = 0
     for thresh in thresholds:
         predict = predict_scores.copy()
@@ -211,6 +212,8 @@ class InferenceDataset(torch.utils.data.Dataset):
                 if idx_frame % denom == 0:
                     save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
                     save_image(gts[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_gt_mask.png', is_mask=True)
+                    masks[masks_score > (2/3)] = 1
+                    masks[masks_score <= (2/3)] = 0
                     save_image(masks[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_pred_mask.png', is_mask=True)
 
             if self.test_run:
