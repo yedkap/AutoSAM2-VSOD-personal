@@ -36,8 +36,8 @@ def Dice_loss(y_true, y_pred, smooth=1):
 
 def get_dice_ji(predict_scores, target_in, smooth=1e-8):
     target = target_in + 1
-    # thresholds = np.linspace(0, 1, 21)
-    thresholds = [2/3]
+    thresholds = np.linspace(0, 1, 21)
+    # thresholds = [2/3]
     f_betas = []
     for thresh in thresholds:
         predict = predict_scores.copy()
@@ -198,6 +198,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             dice, ji, f_betas = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             f_betas = np.array(f_betas)
+            print(f_betas.shape)
             f_beta = f_betas[13]
             f_betas_list.append(f_betas)
             iou_list.append(ji)
