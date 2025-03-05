@@ -34,20 +34,27 @@ def Dice_loss(y_true, y_pred, smooth=1):
     return 1 - torch.mean(tversky_class)
 
 
-def get_dice_ji(predict, target):
-    predict = predict + 1
-    target = target + 1
-    tp = np.sum(((predict == 2) * (target == 2)) * (target > 0))
-    fp = np.sum(((predict == 2) * (target == 1)) * (target > 0))
-    fn = np.sum(((predict == 1) * (target == 2)) * (target > 0))
-    ji = float(np.nan_to_num(tp / (tp + fp + fn)))
-    dice = float(np.nan_to_num(2 * tp / (2 * tp + fp + fn)))
+def get_dice_ji(predict_scores, target, smooth=1):
+    thresholds = np.linspace(0, 1, 21)
+    max_f_beta = 0
+    for thresh in thresholds:
+        predict = predict_scores.copy()
+        predict[predict_scores > thresh] = 1
+        predict[predict_scores <= thresh] = 0
+        predict = predict + 1
+        target = target + 1
+        tp = np.sum(((predict == 2) * (target == 2)) * (target > 0))
+        fp = np.sum(((predict == 2) * (target == 1)) * (target > 0))
+        fn = np.sum(((predict == 1) * (target == 2)) * (target > 0))
+        ji = float(np.nan_to_num(tp / (tp + fp + fn + smooth)))
+        dice = float(np.nan_to_num(2 * tp / (2 * tp + fp + fn + smooth)))
 
-    precision = float(np.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
-    recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
-    beta_sq = 0.3
-    f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (precision + recall) > 0 else 0.0
-    return dice, ji, f_beta
+        precision = float(np.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
+        recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
+        beta_sq = 0.3
+        f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth))) if (precision + recall) > 0 else 0.0
+        max_f_beta = max(max_f_beta, f_beta)
+    return dice, ji, max_f_beta
 
 
 def get_mae(predict, target):
@@ -186,9 +193,7 @@ class InferenceDataset(torch.utils.data.Dataset):
                    gts.squeeze().detach().cpu().numpy().astype(np.float32)
             )
 
-            masks[masks > 2/3] = 1
-            masks[masks <= 2/3] = 0
-            dice, ji, f_beta = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
+            dice, ji, f_beta = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             iou_list.append(ji)
             dice_list.append(dice)
