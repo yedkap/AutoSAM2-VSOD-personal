@@ -244,7 +244,7 @@ def sam_call(batched_input, sam, dense_embeddings, device):
     input_points = None
     input_labels = None
     dense_embeddings_frame = dense_embeddings[:, 0].to(device=device)
-    _, out_objs_ids_frame, out_mask_logits_frame_0 = sam.add_new_points_or_box(
+    _, out_objs_ids_frame, _ = sam.add_new_points_or_box(
         inference_state=inference_state,
         frame_idx=0,
         obj_id=0,
@@ -257,8 +257,8 @@ def sam_call(batched_input, sam, dense_embeddings, device):
     for out_frame_idx, out_obj_ids, out_mask_logits_frame in sam.propagate_in_video(inference_state):
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
-        out_mask_logits_cond.append(out_mask_logits_frame)
-    out_mask_logits_points = [out_mask_logits_frame_0]
+        # out_mask_logits_cond.append(out_mask_logits_frame)
+    # out_mask_logits_points = [out_mask_logits_frame_0]
     for frame_idx in range(1, num_frames):
         dense_embeddings_frame = dense_embeddings[:, frame_idx].to(device=device)
         # dense_embeddings_frame = None
