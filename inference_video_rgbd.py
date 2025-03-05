@@ -34,16 +34,16 @@ def Dice_loss(y_true, y_pred, smooth=1):
     return 1 - torch.mean(tversky_class)
 
 
-def get_dice_ji(predict_scores, target, smooth=1e-8):
-    # thresholds = np.linspace(0, 1, 21)
-    thresholds = [1/2]
+def get_dice_ji(predict_scores, target_in, smooth=1e-8):
+    target = target_in + 1
+    thresholds = np.linspace(0, 1, 21)
+    # thresholds = [2/3]
     f_betas = []
     for thresh in thresholds:
         predict = predict_scores.copy()
         predict[predict_scores > thresh] = 1
         predict[predict_scores <= thresh] = 0
         predict = predict + 1
-        target = target + 1
         tp = np.sum(((predict == 2) * (target == 2)) * (target > 0))
         fp = np.sum(((predict == 2) * (target == 1)) * (target > 0))
         fn = np.sum(((predict == 1) * (target == 2)) * (target > 0))
@@ -54,10 +54,6 @@ def get_dice_ji(predict_scores, target, smooth=1e-8):
         recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
         beta_sq = 0.3
         f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth))) if (precision + recall) > 0 else 0.0
-        print(fp)
-        print(fn)
-        print(thresh)
-        print(f_beta)
         f_betas.append(f_beta)
     return dice, ji, f_betas
 
