@@ -5,6 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 import os
 import numpy as np
+from models.model_single import ModelEmb as ModelEmb
 from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset
@@ -18,6 +19,7 @@ from sam2.sam2_video_predictor import SAM2VideoPredictor
 
 SAM_VERSION = 2
 VIDEO_MODE = False
+
 
 def norm_batch(x):
     bs, t, c = x.shape[0:3]
@@ -119,7 +121,7 @@ def unpad(mask, original_size):
     return mask
 
 
-def call_model(model, model_input_rgb,model_input_depth, device):
+def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
     # Define pixel mean and std as tensors
     pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
@@ -131,18 +133,22 @@ def call_model(model, model_input_rgb,model_input_depth, device):
     for idx_frame in range(num_frames):
         normalized_input_frame = normalized_input[:, idx_frame]
         depth_frame= model_input_depth[:,idx_frame]
-        output = model(normalized_input_frame, depth_frame)
+        if use_depth:
+            output = model(normalized_input_frame, depth_frame)
+        else:
+            output = model(normalized_input_frame)
         outputs.append(output)
     outputs = torch.stack(outputs, dim=1)
 
     return outputs
 
 class Trainer(torch.utils.data.Dataset):
-    def __init__(self, args, test_run=False):
+    def __init__(self, args, test_run=False, use_depth=True):
         self.train_root = args['root_images_train']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
         self.num_outputs = 3
+        self.use_depth = use_depth
 
     def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps, test_run=False):
         num_images = len(ds)
@@ -170,19 +176,15 @@ class Trainer(torch.utils.data.Dataset):
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
-            if SAM_VERSION == 1:
-                dense_embeddings = model(orig_imgs_small, depth_imgs_small) ##add depth
-            else:
-                dense_embeddings = call_model(model, orig_imgs_small,depth_imgs_small, device=device) ##add depth
+
+            dense_embeddings = call_model(
+                model, orig_imgs_small,depth_imgs_small, device=device, use_depth=self.use_depth
+            )
+
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
-            masks, masks_gt = sam_call(batched_input, sam, dense_embeddings, device)
+            masks, _ = sam_call(batched_input, sam, dense_embeddings, device)
             masks = unpad(masks, original_sz)
             masks = norm_batch(masks)
-            if masks_gt is not None:
-                # gts = norm_batch(masks_gt)
-                masks_gt[masks_gt > 0.] = 1
-                masks_gt[masks_gt <= 0.] = 0
-                gts = masks_gt.float()
             gts = unpad(gts, original_sz)
             loss = gen_step(optimizer, gts, masks, criterion, accumulation_steps=accumulation_steps, step=ii)
             loss_list.append(loss)
@@ -207,11 +209,12 @@ class Trainer(torch.utils.data.Dataset):
 
 
 class InferenceDataset(torch.utils.data.Dataset):
-    def __init__(self, args, test_run=False):
+    def __init__(self, args, test_run=False, use_depth=True):
         self.eval_root = args['root_images_eval']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
         self.num_outputs = 5
+        self.use_depth = use_depth
 
     @torch.inference_mode()
     def inference_ds(self, ds, model, sam, transform, epoch, device):
@@ -240,10 +243,11 @@ class InferenceDataset(torch.utils.data.Dataset):
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
-            if SAM_VERSION == 1:
-                dense_embeddings = model(orig_imgs_small, depth_imgs_small)  ##add depth
-            else:
-                dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device)
+
+            dense_embeddings = call_model(
+                model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth
+            )
+
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings, device=device)
             masks = norm_batch(masks)
@@ -253,8 +257,8 @@ class InferenceDataset(torch.utils.data.Dataset):
             # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
             # masks = F.interpolate(masks, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
             # gts = F.interpolate(gts, (self.Idim, self.Idim), mode='nearest')
-            masks[masks > 0.5] = 1
-            masks[masks <= 0.5] = 0
+            masks[masks > 0.75] = 1
+            masks[masks <= 0.75] = 0
             masks = unpad(masks, original_sz)
             gts = unpad(gts, original_sz)
             dice, ji, f_beta = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
@@ -318,8 +322,6 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         out_mask_logits.append(out_mask_logits_frame)
 
 
-        # low_res_masks, iou_predictions, _ = sam.predict_batch(prompt_embedding_batch=dense_embeddings,
-        #                                                       multimask_output=False, return_logits=True)
     out_mask_logits = torch.stack(out_mask_logits, dim=1)
     return out_mask_logits, None
 
@@ -329,17 +331,19 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
-    if SAM_VERSION == 1:
-        sam = sam_model_registry[sam_args['model_type']](checkpoint=sam_args['sam_checkpoint'])
-        transform = ResizeLongestSide_sam1(sam.image_encoder.img_size)
+
+    if args['use_depth']:
+        model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
     else:
-        model_cfg = sam_args['fp_config']
-        sam = build_sam2_video_predictor(model_cfg, sam_args['checkpoint'], device=device)
-        sam.fill_hole_area = 0
-        assert not sam.training
-        # sam = SAM2ImagePredictor(build_sam2(model_cfg, sam_args['checkpoint'], device=device))
-        transform = None
+        model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+
+    model_cfg = sam_args['fp_config']
+    sam = build_sam2_video_predictor(model_cfg, sam_args['checkpoint'], device=device)
+    sam.fill_hole_area = 0
+    assert not sam.training
+    # sam = SAM2ImagePredictor(build_sam2(model_cfg, sam_args['checkpoint'], device=device))
+    transform = None
+
     if args['decoder_only']:
         optimizer = optim.Adam(model.decoder.parameters(),
                                lr=float(args['learning_rate']),
@@ -356,7 +360,7 @@ def main(args=None, sam_args=None, test_run=False):
         scheduler = None
         
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], add_depth=True)
     elif args['task'] == 'VIDSOD':
         trainset, testset = get_vidsod_dataset(args['root_data_dir'], sam_trans=transform,
                                                cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
@@ -371,8 +375,8 @@ def main(args=None, sam_args=None, test_run=False):
     path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
     f_best = open(path_best, 'w')
 
-    trainer = Trainer(args, test_run)
-    inference_ds = InferenceDataset(args, test_run)
+    trainer = Trainer(args, test_run, use_depth=args['use_depth'])
+    inference_ds = InferenceDataset(args, test_run, use_depth=args['use_depth'])
 
     for epoch in range(int(args['epoches'])):
         current_lr = optimizer.param_groups[0]['lr']
@@ -420,6 +424,7 @@ if __name__ == '__main__':
     parser.add_argument('--refresh_id', default=False, type=bool, help='refresh object ID in each frame')
     parser.add_argument('--lr_decay', default=False, type=bool, help='refresh object ID in each frame')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
+    parser.add_argument('--use_depth', default=True, type=bool, help='If true, uses RGBD backbone for the prompt encoder')
     args = vars(parser.parse_args())
 
     os.makedirs('results', exist_ok=True)

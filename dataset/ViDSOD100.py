@@ -14,11 +14,12 @@ class VIDSODDataset(data.Dataset):
     DataLoader for VIDSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_root, video_dirs=None, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1):
+    def __init__(
+            self, dir_root, video_dirs=None, train=True, sam_trans=None,
+            cutoff=None, len_seq=4, is_eval=False, frame_skip=1,
+    ):
         self.dir_root = dir_root
         self.len_seq = len_seq
-        # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
-        # self.gts = [os.path.join(gt_root, f) for f in os.listdir(gt_root) if f.endswith('.png')]
         if video_dirs is None:
             self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if
                                os.path.isdir(os.path.join(dir_root, d))]
@@ -121,7 +122,7 @@ class VIDSODDataset(data.Dataset):
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
 
-        return imgs, masks,depths, original_sizes, image_sizes
+        return imgs, masks, depths, original_sizes, image_sizes
 
     @staticmethod
     def cv2_loader(path, is_mask, is_depth=False):
@@ -172,7 +173,7 @@ def get_vidsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None):
 
     ds_test = VIDSODDataset(
         dir_root_test, train=False, sam_trans=sam_trans,
-        cutoff=cutoff_eval, len_seq=np.inf, is_eval=True
+        cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=1,
     )
 
     return ds_test

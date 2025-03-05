@@ -3,7 +3,9 @@ import torch
 from tqdm import tqdm
 import os
 import numpy as np
+from models.model_single import ModelEmb as ModelEmb
 from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
+
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset_test
 from dataset.ViDSOD100 import get_vidsod_dataset_test
@@ -11,27 +13,7 @@ from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLonge
 from sam2.build_sam import build_sam2, build_sam2_video_predictor
 from utils import save_image
 import torch.nn.functional as F
-
-def norm_batch(x):
-    bs, t, c = x.shape[0:3]
-    assert c == 1
-    H, W = x.shape[-2], x.shape[-1]
-    min_value = x.view(bs, t, -1).min(dim=-1, keepdim=True)[0].view(bs, t, 1, 1, 1)
-    max_value = x.view(bs, t, -1).max(dim=-1, keepdim=True)[0].view(bs, t, 1, 1, 1)
-    x = (x - min_value) / (max_value - min_value + 1e-6)
-    # x = torch.sigmoid(x)
-    # raise Exception('not yet debugged.')
-    return x
-
-
-def Dice_loss(y_true, y_pred, smooth=1):
-    alpha = 0.5
-    beta = 0.5
-    tp = torch.sum(y_true * y_pred, dim=(1, 2, 3))
-    fn = torch.sum(y_true * (1 - y_pred), dim=(1, 2, 3))
-    fp = torch.sum((1 - y_true) * y_pred, dim=(1, 2, 3))
-    tversky_class = (tp + smooth) / (tp + alpha * fn + beta * fp + smooth)
-    return 1 - torch.mean(tversky_class)
+from train_video_rgbd import get_input_dict, norm_batch, unpad
 
 
 def get_dice_ji(predict_scores, target_in, smooth=1e-8):
@@ -71,36 +53,6 @@ def open_folder(path):
     return (path + '/gpu' + str(len(a)))
 
 
-def gen_step(optimizer, gts, masks, criterion, accumulation_steps, step):
-    # B, T, C =  masks.shape
-    size = masks.shape[-2:]
-    if len(masks.shape) == 5:
-        masks = masks.squeeze(dim=-3)
-    if len(gts.shape) == 5:
-        gts = gts.squeeze(dim=-3)
-    gts_sized = F.interpolate(gts, size, mode='nearest')
-    loss = criterion(masks, gts_sized) + Dice_loss(masks, gts_sized)
-    loss.backward()
-    if (step + 1) % accumulation_steps == 0:  # Wait for several backward steps
-        optimizer.step()
-        optimizer.zero_grad()
-    return loss.item()
-
-
-def get_input_dict(imgs, original_sz, img_sz):
-    batched_input = []
-    for i, img in enumerate(imgs):
-        input_size = tuple([int(x) for x in img_sz[i].squeeze().tolist()])
-        original_size = tuple([int(x) for x in original_sz[i].squeeze().tolist()])
-        singel_input = {
-            'image': img,
-            'original_size': original_size,
-            'image_size': input_size,
-            'point_coords': None,
-            'point_labels': None,
-        }
-        batched_input.append(singel_input)
-    return batched_input
 #
 #
 # def postprocess_masks(masks_dict):
@@ -114,15 +66,7 @@ def get_input_dict(imgs, original_sz, img_sz):
 #     return masks, ious
 
 
-def unpad(mask, original_size):
-    # if len(original_size.shape) == 2:
-    #     original_size = original_size[0]
-    H_orig, W_orig = int(original_size[0, 0]), int(original_size[0, 1])
-    mask = mask[..., :H_orig, :W_orig]
-    return mask
-
-
-def call_model(model, model_input_rgb,model_input_depth, device):
+def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
     # Define pixel mean and std as tensors
     pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
@@ -134,7 +78,10 @@ def call_model(model, model_input_rgb,model_input_depth, device):
     for idx_frame in range(num_frames):
         normalized_input_frame = normalized_input[:, idx_frame]
         depth_frame= model_input_depth[:,idx_frame]
-        output = model(normalized_input_frame, depth_frame)
+        if use_depth:
+            output = model(normalized_input_frame, depth_frame)
+        else:
+            output = model(normalized_input_frame)
         outputs.append(output.cpu())
     outputs = torch.stack(outputs, dim=1)
 
@@ -142,12 +89,13 @@ def call_model(model, model_input_rgb,model_input_depth, device):
 
 
 class InferenceDataset(torch.utils.data.Dataset):
-    def __init__(self, args, test_run, device):
+    def __init__(self, args, test_run, device, use_depth=True):
         self.eval_root = args['root_images_eval']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
         self.num_outputs = 5
         self.device=device
+        self.use_depth = use_depth
 
     @torch.inference_mode()
     def inference_ds(self, ds, model, sam, transform, epoch, device):
@@ -180,7 +128,7 @@ class InferenceDataset(torch.utils.data.Dataset):
                                             align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
 
-            dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device)
+            dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings, device)
             masks = norm_batch(masks)
@@ -198,7 +146,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             dice, ji, f_betas = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             f_betas = np.array(f_betas)
-            f_beta = f_betas[13]
+            f_beta = f_betas[15]
             iou_list.append(ji)
             dice_list.append(dice)
             f_beta_list.append(f_beta)
@@ -216,8 +164,8 @@ class InferenceDataset(torch.utils.data.Dataset):
                 if idx_frame % denom == 0:
                     save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
                     save_image(gts[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_gt_mask.png', is_mask=True)
-                    masks[masks_score > (2/3)] = 1
-                    masks[masks_score <= (2/3)] = 0
+                    masks[masks_score > 0.75] = 1
+                    masks[masks_score <= 0.75] = 0
                     save_image(masks[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_pred_mask.png', is_mask=True)
 
             if self.test_run:
@@ -288,7 +236,12 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=True).to(device)
+
+    if args['use_depth']:
+        model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=True).to(device)
+    else:
+        model = ModelEmb(args=args, size_out=64, train_decoder_only=True).to(device)
+
     model1 = torch.load(args['path_best'], weights_only=False)
     model.load_state_dict(model1.state_dict())
 
@@ -300,7 +253,7 @@ def main(args=None, sam_args=None, test_run=False):
     transform = None
 
     if args['task'] == 'davsod':
-        testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], dataset=args['dataset'])
+        testset = get_davsod_dataset_test(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], dataset=args['dataset'], add_depth=True)
     elif args['task'] == 'VIDSOD':
         testset = get_vidsod_dataset_test(args['root_data_dir'], sam_trans=transform,
                                                cutoff_eval=args['cutoff_eval'])
@@ -309,7 +262,7 @@ def main(args=None, sam_args=None, test_run=False):
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
                                          num_workers=int(args['nW_eval']), drop_last=False)
 
-    inference_ds = InferenceDataset(args, test_run, device)
+    inference_ds = InferenceDataset(args, test_run, device, use_depth=args['use_depth'])
 
     with torch.no_grad():
         f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
@@ -334,6 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     parser.add_argument('--dataset', default='easy', help='test dataset. easy, normal, hard, vidsod')
+    parser.add_argument('--use_depth', default=True, type=bool, help='If true, uses RGBD backbone for the prompt encoder')
     args = vars(parser.parse_args())
 
     os.makedirs('results_test', exist_ok=True)
