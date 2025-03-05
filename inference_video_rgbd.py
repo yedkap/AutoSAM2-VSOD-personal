@@ -35,9 +35,9 @@ def Dice_loss(y_true, y_pred, smooth=1):
 
 
 def get_dice_ji(predict_scores, target, smooth=1e-8):
-    # thresholds = np.linspace(0, 1, 21)
-    thresholds = [1/2]
-    max_f_beta = 0
+    thresholds = np.linspace(0, 1, 21)
+    # thresholds = [1/2]
+    f_betas = []
     for thresh in thresholds:
         predict = predict_scores.copy()
         predict[predict_scores > thresh] = 1
@@ -54,8 +54,8 @@ def get_dice_ji(predict_scores, target, smooth=1e-8):
         recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
         beta_sq = 0.3
         f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth))) if (precision + recall) > 0 else 0.0
-        max_f_beta = max(max_f_beta, f_beta)
-    return dice, ji, max_f_beta
+        f_betas.append(f_beta)
+    return dice, ji, max_f_betas
 
 
 def get_mae(predict, target):
@@ -158,6 +158,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         iou_list = []
         dice_list = []
         f_beta_list = []
+        f_betas_list = []
         mae_list = []
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
@@ -194,11 +195,15 @@ class InferenceDataset(torch.utils.data.Dataset):
                    gts.squeeze().detach().cpu().numpy().astype(np.float32)
             )
 
-            dice, ji, f_beta = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
+            dice, ji, f_betas = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
+            f_betas = np.array(f_betas)
+            f_beta = f_betas[14]
+            f_betas_list.append(f_betas)
             iou_list.append(ji)
             dice_list.append(dice)
             f_beta_list.append(f_beta)
+            f_betas_list.append(f_beta
             mae_list.append(mae)
             pbar.set_description(
                 '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: MAE {mae:.4f} :: F_beta {f_beta:.4f}'.format(
@@ -218,8 +223,14 @@ class InferenceDataset(torch.utils.data.Dataset):
 
             if self.test_run:
                 break
+        f_betas_all = np.array(f_betas_list)
+        f_betas_mean = f_betas_all.mean(axis=0)
+        idx_f_beta_max = np.argmax(column_means)
+        f_beta_max = f_betas_mean[idx_f_beta_max]
+        print(f'maximum f score: {f_beta_max}')
+        print(f'maximum f score index: {idx_f_beta_max}')
         model.train()
-        return np.mean(f_beta_list)
+        return f_beta_max, f_betas_all
 
 
 def sam_call(batched_input, sam, dense_embeddings, device):
@@ -302,8 +313,10 @@ def main(args=None, sam_args=None, test_run=False):
     inference_ds = InferenceDataset(args, test_run, device)
 
     with torch.no_grad():
-        f_beta_mean = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
-        print(f_beta_mean)
+        f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
+        print(f_beta_max)
+        eval_dir = os.path.join(self.eval_root, '0')
+        np.savetxt(os.path.join(eval_dir, "f_betas.csv"), f_betas_array, delimiter=",")
 
 
 if __name__ == '__main__':
