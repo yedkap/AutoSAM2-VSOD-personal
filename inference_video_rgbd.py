@@ -203,7 +203,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             iou_list.append(ji)
             dice_list.append(dice)
             f_beta_list.append(f_beta)
-            f_betas_list.append(f_beta
+            f_betas_list.append(f_beta)
             mae_list.append(mae)
             pbar.set_description(
                 '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: MAE {mae:.4f} :: F_beta {f_beta:.4f}'.format(
