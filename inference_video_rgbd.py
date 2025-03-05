@@ -314,7 +314,7 @@ def main(args=None, sam_args=None, test_run=False):
     with torch.no_grad():
         f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
         print(f_beta_max)
-        eval_dir = os.path.join(self.eval_root, '0')
+        eval_dir = os.path.join(args['root_images_eval'], '0')
         np.savetxt(os.path.join(eval_dir, "f_betas.csv"), f_betas_array, delimiter=",")
 
 
