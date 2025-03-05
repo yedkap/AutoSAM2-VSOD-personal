@@ -54,6 +54,9 @@ def get_dice_ji(predict_scores, target, smooth=1e-8):
         recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
         beta_sq = 0.3
         f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth))) if (precision + recall) > 0 else 0.0
+        print(fp)
+        print(fn)
+        print(thresh)
         print(f_beta)
         f_betas.append(f_beta)
     return dice, ji, f_betas
