@@ -198,13 +198,11 @@ class InferenceDataset(torch.utils.data.Dataset):
             dice, ji, f_betas = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             f_betas = np.array(f_betas)
-            print(f_betas.shape)
             f_beta = f_betas[13]
-            f_betas_list.append(f_betas)
             iou_list.append(ji)
             dice_list.append(dice)
             f_beta_list.append(f_beta)
-            f_betas_list.append(f_beta)
+            f_betas_list.append(f_betas)
             mae_list.append(mae)
             pbar.set_description(
                 '(Inference | {task}) Epoch {epoch} :: Dice {dice:.4f} :: MAE {mae:.4f} :: F_beta {f_beta:.4f}'.format(
