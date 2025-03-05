@@ -13,7 +13,7 @@ from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLonge
 from sam2.build_sam import build_sam2, build_sam2_video_predictor
 from utils import save_image
 import torch.nn.functional as F
-from train_video_rgbd import get_input_dict, norm_batch, unpad
+from train import get_input_dict, norm_batch, unpad
 
 
 def get_dice_ji(predict_scores, target_in, smooth=1e-8):
