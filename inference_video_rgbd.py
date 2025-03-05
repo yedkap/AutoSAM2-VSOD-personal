@@ -1,7 +1,6 @@
 import torch.utils.data
 import torch
 from tqdm import tqdm
-
 import os
 import numpy as np
 from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
@@ -36,8 +35,8 @@ def Dice_loss(y_true, y_pred, smooth=1):
 
 
 def get_dice_ji(predict_scores, target, smooth=1e-8):
-    thresholds = np.linspace(0, 1, 21)
-    # thresholds = [1/2]
+    # thresholds = np.linspace(0, 1, 21)
+    thresholds = [1/2]
     f_betas = []
     for thresh in thresholds:
         predict = predict_scores.copy()
