@@ -34,7 +34,7 @@ def Dice_loss(y_true, y_pred, smooth=1):
     return 1 - torch.mean(tversky_class)
 
 
-def get_dice_ji(predict_scores, target, smooth=1):
+def get_dice_ji(predict_scores, target, smooth=1e-8):
     thresholds = np.linspace(0, 1, 21)
     max_f_beta = 0
     for thresh in thresholds:
