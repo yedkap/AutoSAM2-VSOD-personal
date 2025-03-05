@@ -55,7 +55,7 @@ def get_dice_ji(predict_scores, target, smooth=1e-8):
         beta_sq = 0.3
         f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall + smooth))) if (precision + recall) > 0 else 0.0
         f_betas.append(f_beta)
-    return dice, ji, max_f_betas
+    return dice, ji, f_betas
 
 
 def get_mae(predict, target):
@@ -198,7 +198,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             dice, ji, f_betas = get_dice_ji(masks_score.squeeze().detach().cpu().numpy(),
                                    gts.squeeze().detach().cpu().numpy())
             f_betas = np.array(f_betas)
-            f_beta = f_betas[14]
+            f_beta = f_betas[13]
             f_betas_list.append(f_betas)
             iou_list.append(ji)
             dice_list.append(dice)
@@ -225,7 +225,7 @@ class InferenceDataset(torch.utils.data.Dataset):
                 break
         f_betas_all = np.array(f_betas_list)
         f_betas_mean = f_betas_all.mean(axis=0)
-        idx_f_beta_max = np.argmax(column_means)
+        idx_f_beta_max = np.argmax(f_betas_mean)
         f_beta_max = f_betas_mean[idx_f_beta_max]
         print(f'maximum f score: {f_beta_max}')
         print(f'maximum f score index: {idx_f_beta_max}')
