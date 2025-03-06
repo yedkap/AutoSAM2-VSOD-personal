@@ -7,6 +7,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
 from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
+from models.model_single_rgbd_simple import ModelEmb as ModelEmbRGBDSimple
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset
 from dataset.ViDSOD100 import get_vidsod_dataset
@@ -58,7 +59,8 @@ def get_dice_ji(predict, target):
     precision = float(np.nan_to_num(tp / (tp + fp))) if (tp + fp) > 0 else 0.0
     recall = float(np.nan_to_num(tp / (tp + fn))) if (tp + fn) > 0 else 0.0
     beta_sq = 0.3
-    f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (precision + recall) > 0 else 0.0
+    f_beta = float(np.nan_to_num((1 + beta_sq) * precision * recall / (beta_sq * precision + recall))) if (
+                                                                                                                      precision + recall) > 0 else 0.0
     return dice, ji, f_beta
 
 
@@ -100,6 +102,8 @@ def get_input_dict(imgs, original_sz, img_sz):
         }
         batched_input.append(singel_input)
     return batched_input
+
+
 #
 #
 # def postprocess_masks(masks_dict):
@@ -132,7 +136,7 @@ def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
     outputs = []
     for idx_frame in range(num_frames):
         normalized_input_frame = normalized_input[:, idx_frame]
-        depth_frame= model_input_depth[:,idx_frame]
+        depth_frame = model_input_depth[:, idx_frame]
         if use_depth:
             output = model(normalized_input_frame, depth_frame)
         else:
@@ -142,6 +146,7 @@ def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
 
     return outputs
 
+
 class Trainer(torch.utils.data.Dataset):
     def __init__(self, args, test_run=False, use_depth=True):
         self.train_root = args['root_images_train']
@@ -150,7 +155,8 @@ class Trainer(torch.utils.data.Dataset):
         self.num_outputs = 3
         self.use_depth = use_depth
 
-    def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps, test_run=False):
+    def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps,
+                           test_run=False):
         num_images = len(ds)
         denom = num_images // self.num_outputs
         loss_list = []
@@ -171,14 +177,15 @@ class Trainer(torch.utils.data.Dataset):
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
             depth_imgs = depth.to(device)
-            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                            align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
-                                            align_corners=True)
+                                             align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
 
             dense_embeddings = call_model(
-                model, orig_imgs_small,depth_imgs_small, device=device, use_depth=self.use_depth
+                model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth
             )
 
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
@@ -228,20 +235,21 @@ class InferenceDataset(torch.utils.data.Dataset):
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
-        for ii, (imgs, gts,depth, original_szs, img_szs) in enumerate(pbar):
+        for ii, (imgs, gts, depth, original_szs, img_szs) in enumerate(pbar):
             batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
-            depth_imgs=depth.to(device)
+            depth_imgs = depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
+            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                            align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
-                                            align_corners=True)
+                                             align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
 
             dense_embeddings = call_model(
@@ -262,7 +270,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             masks = unpad(masks, original_sz)
             gts = unpad(gts, original_sz)
             dice, ji, f_beta = get_dice_ji(masks.squeeze().detach().cpu().numpy(),
-                                   gts.squeeze().detach().cpu().numpy())
+                                           gts.squeeze().detach().cpu().numpy())
             iou_list.append(ji)
             dice_list.append(dice)
             f_beta_list.append(f_beta)
@@ -277,7 +285,8 @@ class InferenceDataset(torch.utils.data.Dataset):
             if ii % denom == 0:
                 for idx_frame in range(seq_len):
                     if idx_frame % 8 == 0:
-                        save_image(unpad(orig_imgs[0, idx_frame], original_sz), f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
+                        save_image(unpad(orig_imgs[0, idx_frame], original_sz),
+                                   f'{eval_dir}/{ii}_{idx_frame}_image_in.png', is_mask=False)
                         save_image(gts[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_gt_mask.png', is_mask=True)
                         save_image(masks[0, idx_frame], f'{eval_dir}/{ii}_{idx_frame}_pred_mask.png', is_mask=True)
 
@@ -309,18 +318,17 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
         with torch.no_grad():
             _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
-            inference_state=inference_state,
-            frame_idx=frame_idx,
-            obj_id=0,
-            points=input_points,
-            labels=input_labels,
-            box=None,
-            dense_embeddings_pred=dense_embeddings_frame,
+                inference_state=inference_state,
+                frame_idx=frame_idx,
+                obj_id=0,
+                points=input_points,
+                labels=input_labels,
+                box=None,
+                dense_embeddings_pred=dense_embeddings_frame,
             )
         out_mask_logits_frame = torch.clamp(out_mask_logits_frame, -32.0, 32.0)
         assert out_objs_ids_frame == [0]
         out_mask_logits.append(out_mask_logits_frame)
-
 
     out_mask_logits = torch.stack(out_mask_logits, dim=1)
     return out_mask_logits, None
@@ -333,7 +341,10 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_depth']:
-        model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+        if args['use_esa']:
+            model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+        else:
+            model = ModelEmbRGBDSimple(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
 
@@ -352,15 +363,16 @@ def main(args=None, sam_args=None, test_run=False):
         optimizer = optim.Adam(model.parameters(),
                                lr=float(args['learning_rate']),
                                weight_decay=float(args['WD']))
-    if args['lr_decay']: #used to be if args['learning_rate_decay']:
+    if args['lr_decay']:  # used to be if args['learning_rate_decay']:
         print('using learning rate decay')
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=1/3)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=1 / 3)
     else:
         print('using constant learning rate')
         scheduler = None
-        
+
     if args['task'] == 'davsod':
-        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform, cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], add_depth=True)
+        trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform,
+                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], add_depth=True)
     elif args['task'] == 'VIDSOD':
         trainset, testset = get_vidsod_dataset(args['root_data_dir'], sam_trans=transform,
                                                cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
@@ -381,7 +393,8 @@ def main(args=None, sam_args=None, test_run=False):
     for epoch in range(int(args['epoches'])):
         current_lr = optimizer.param_groups[0]['lr']
         print(f'learning rate: {current_lr}')
-        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device, accumulation_steps=args['accumulation_steps'], test_run=test_run)
+        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device,
+                                   accumulation_steps=args['accumulation_steps'], test_run=test_run)
         if scheduler is not None:
             scheduler.step()
         if epoch % int(args['save_every']) == 0:
@@ -401,6 +414,7 @@ def main(args=None, sam_args=None, test_run=False):
 
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('--root_data_dir', required=True, help='root data directory')
     parser.add_argument('--sam2_size', default='large', help='root data directory')
@@ -412,40 +426,46 @@ if __name__ == '__main__':
     parser.add_argument('-nW_eval', '--nW_eval', default=0, help='num workers eval', required=False)
     parser.add_argument('-WD', '--WD', default=0, help='weight decay', required=False)  # 1e-4
     parser.add_argument('-task', '--task', default='VIDSOD', help='segmenatation task type', required=False)
-    parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py', required=False)
+    parser.add_argument('-depth_wise', '--depth_wise', default=False, help='unkown effect, model_single.py',
+                        required=False)
     parser.add_argument('-order', '--order', default=85, help='unkown effect, model_single.py', required=False)
     parser.add_argument('-Idim', '--Idim', default=512, help='image size', required=False)
-    parser.add_argument('--test_run', default=0, type=int, help='if True, stops all train / eval loops after single iteration / input', required=False)
-    parser.add_argument('--accumulation_steps', default=4, type=int, help='number of accumulation steps for backwards pass', required=False)
-    parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
+    parser.add_argument('--test_run', default=0, type=int,
+                        help='if True, stops all train / eval loops after single iteration / input', required=False)
+    parser.add_argument('--accumulation_steps', default=4, type=int,
+                        help='number of accumulation steps for backwards pass', required=False)
+    parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.',
+                        required=False)
     parser.add_argument('--save_every', default=20, type=int, help='save every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=1, type=int, help='update only ModelEmb decoder')
     parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
     args = vars(parser.parse_args())
 
     args['decoder_only'] = args['decoder_only'] == 1
     args['use_depth'] = args['use_depth'] == 1
     args['lr_decay'] = args['lr_decay'] == 1
     args['test_run'] = args['test_run'] == 1
+    args['use_esa'] = args['use_esa'] == 1
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
     args['folder'] = folder
     args['results_root'] = os.path.join('results',
-                                'gpu' + folder,
-                           )
+                                        'gpu' + folder,
+                                        )
     args['path'] = os.path.join(args['results_root'],
                                 'net_last.pth')
     args['path_best'] = os.path.join(args['results_root'],
                                      'net_best.pth')
     args['path_occasional'] = os.path.join(args['results_root'],
-                                     'net_epoch_{}.pth')
+                                           'net_epoch_{}.pth')
     args['root_images_eval'] = os.path.join(args['results_root'],
-                                     'eval_images')
+                                            'eval_images')
     args['root_images_train'] = os.path.join(args['results_root'],
-                                     'train_images')
+                                             'train_images')
     os.mkdir(args['root_images_eval'])
     os.mkdir(args['root_images_train'])
 
