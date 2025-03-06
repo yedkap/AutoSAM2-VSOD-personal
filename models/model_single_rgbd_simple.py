@@ -138,6 +138,7 @@ class ModelEmb(nn.Module):
     def __init__(self, args, size_out=64, train_decoder_only=False):
         super(ModelEmb, self).__init__()
         print('using HarDNet backbone')
+        self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
         self.backbone = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         d, f = self.backbone.full_features, self.backbone.features
         self.decoder = SmallDecoder(d, out=256)
@@ -147,7 +148,8 @@ class ModelEmb(nn.Module):
         self.train_decoder_only = train_decoder_only
 
     def forward(self, img, depth_image):
-        depth_input = depth_image.repeat(1, 3, 1, 1)
+        # depth_input = depth_image.repeat(1, 3, 1, 1)
+        depth_input = self.depth_conv(depth_image)
         if self.train_decoder_only:
             with torch.no_grad():
                 z_img = self.backbone(img)
