@@ -6,7 +6,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
-from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
+from models.model_single import ModelEmbESA
 from models.model_single import ModelEmbSimpleDepth
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset
@@ -342,9 +342,9 @@ def main(args=None, sam_args=None, test_run=False):
 
     if args['use_depth']:
         if args['use_esa']:
-            model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
         else:
-            model = ModelEmbRGBDSimple(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+            model = ModelEmbSimpleDepth(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
 
