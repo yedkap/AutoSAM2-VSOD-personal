@@ -137,6 +137,7 @@ class Model(nn.Module):
 class ModelEmb(nn.Module):
     def __init__(self, args, size_out=64, train_decoder_only=False):
         super(ModelEmb, self).__init__()
+        print('using simple depth integration')
         print('using HarDNet backbone')
         self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
         self.backbone = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
