@@ -4,7 +4,8 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
-from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
+from models.model_single import ModelEmbESA
+from models.model_single import ModelEmbSimpleDepth
 
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset_test
@@ -238,9 +239,12 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_depth']:
-        model = ModelEmbRGBD(args=args, size_out=64, train_decoder_only=True).to(device)
+        if args['use_esa']:
+            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
+        else:
+            model = ModelEmbSimpleDepth(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
     else:
-        model = ModelEmb(args=args, size_out=64, train_decoder_only=True).to(device)
+        model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
 
     model1 = torch.load(args['path_best'], weights_only=False)
     model.load_state_dict(model1.state_dict())
@@ -288,6 +292,9 @@ if __name__ == '__main__':
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     parser.add_argument('--dataset', default='easy', help='test dataset. easy, normal, hard, vidsod')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+
     args = vars(parser.parse_args())
 
     args['use_depth'] = args['use_depth'] == 1
