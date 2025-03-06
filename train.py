@@ -399,7 +399,7 @@ def main(args=None, sam_args=None, test_run=False):
             scheduler.step()
         if epoch % int(args['save_every']) == 0:
             torch.save(model.state_dict(), args['path_occasional'].format(epoch))
-        if epoch % 20 == 0:
+        if epoch % 10 == 0:
             with torch.no_grad():
                 f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
                 if f_beta_val > best:
