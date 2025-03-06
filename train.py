@@ -7,7 +7,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
 from models.model_single_rgbd import ModelEmb as ModelEmbRGBD
-from models.model_single_rgbd_simple import ModelEmb as ModelEmbRGBDSimple
+from models.model_single import ModelEmbSimpleDepth
 from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset
 from dataset.ViDSOD100 import get_vidsod_dataset
