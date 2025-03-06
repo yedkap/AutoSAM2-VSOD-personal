@@ -96,6 +96,8 @@ class VIDSODDataset(data.Dataset):
             # depth_min = np.min(depth)
             # depth_max = np.max(depth)
             # depth = (depth - depth_min) / (depth_max - depth_min) * 255
+            # depth = (depth - (30 / 255)) / (45 / 255)
+            # depth = (depth - 50 / 255) / (70 / 255)
 
             img = self.augmentations.transform(image, is_mask=False) * 255
             mask = self.augmentations.transform(mask * 255, is_mask=True)
