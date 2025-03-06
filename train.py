@@ -398,7 +398,7 @@ def main(args=None, sam_args=None, test_run=False):
         if scheduler is not None:
             scheduler.step()
         if epoch % int(args['save_every']) == 0:
-            torch.save(model, args['path_occasional'].format(epoch))
+            torch.save(model.state_dict(), args['path_occasional'].format(epoch))
         if epoch % 20 == 0:
             with torch.no_grad():
                 f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)

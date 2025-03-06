@@ -77,7 +77,7 @@ class SmallDecoder(nn.Module):
 
 class SmallDecoderSimpleDepth(nn.Module):
     def __init__(self, full_features, out):
-        super(SmallDecoder, self).__init__()
+        super(SmallDecoderSimpleDepth, self).__init__()
         self.reduction_layers = nn.ModuleList([
             nn.Conv2d(full_features[ii] * 2, full_features[ii], kernel_size=1, stride=1, bias=False)
             for ii in (1, 2, 3)
