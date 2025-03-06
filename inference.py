@@ -292,7 +292,6 @@ if __name__ == '__main__':
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     parser.add_argument('--dataset', default='easy', help='test dataset. easy, normal, hard, vidsod')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
-    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
 
     args = vars(parser.parse_args())
