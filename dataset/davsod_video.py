@@ -13,12 +13,14 @@ class DAVSODDataset(data.Dataset):
     DataLoader for DAVSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_root, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1, add_depth=True):
-        self.dir_root = dir_root
+    def __init__(self, dir_roots, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1, add_depth=True):
+        self.dir_roots = dir_roots
         self.len_seq = len_seq
         # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
         # self.gts = [os.path.join(gt_root, f) for f in os.listdir(gt_root) if f.endswith('.png')]
-        self.video_dirs = [os.path.join(dir_root, d) for d in os.listdir(dir_root) if os.path.isdir(os.path.join(dir_root, d))]
+        self.video_dirs = []
+        for dir_root in dir_roots:
+            self.video_dirs.extend(os.path.join(dir_root, d) for d in os.listdir(dir_root) if os.path.isdir(os.path.join(dir_root, d)))
         self.frame_skip = frame_skip
 
         self.video_seqs = []
@@ -135,16 +137,21 @@ def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset=
     dataset_map = {
         'easy': 'Easy-35',
         'normal': 'Normal-25',
-        'hard': 'Difficult-20'
+        'hard': 'Difficult-20',
     }
     
     if dataset not in dataset_map:
         raise ValueError(f"Invalid dataset selection: {dataset}. Choose from 'easy', 'normal', or 'hard'.")
-    
-    dir_root_test = os.path.join(root_dir, f'DAVSOD/{dataset_map[dataset]}/')
+
+    if dataset != 'all':
+        dir_roots_test = [os.path.join(root_dir, f'DAVSOD/{dataset_map[dataset]}/')]
+    else:
+        dir_roots_test = []
+        for folder in dataset_map.values():
+            dir_roots_test.append(os.path.join(root_dir, f'DAVSOD/{folder}/'))
     
     ds_test = DAVSODDataset(
-        dir_root_test, train=False, sam_trans=sam_trans, 
+        dir_roots_test, train=False, sam_trans=sam_trans,
         cutoff=cutoff_eval, len_seq=np.inf, is_eval=True,
         add_depth=add_depth
     )
