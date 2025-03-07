@@ -270,7 +270,7 @@ def sam_call(batched_input, sam, dense_embeddings, device):
     out_mask_logits_final = torch.stack(out_mask_logits_final, dim=1)
 
 
-    return out_mask_logits_stage_1, None
+    return out_mask_logits_final, None
 
 
 def main(args=None, sam_args=None, test_run=False):
