@@ -198,7 +198,7 @@ class ModelEmbSimpleDepth(nn.Module):
                 z_depth = self.backbone(depth_input)
         else:
             z_img = self.backbone(depth_input)
-            z_depth = self.backbone(img, depth_image)
+            z_depth = self.backbone(depth_image)
         z = [torch.cat((z_img_res, z_depth_res), dim=1) for z_img_res, z_depth_res in zip(z_img, z_depth)]
         dense_embeddings = self.decoder(z)
         dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear', align_corners=True)

@@ -281,11 +281,11 @@ def main(args=None, sam_args=None, test_run=False):
 
     if args['use_depth']:
         if args['use_esa']:
-            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=False).to(device)
+            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=True).to(device)
         else:
-            model = ModelEmbSimpleDepth(args=args, size_out=64, train_decoder_only=False).to(device)
+            model = ModelEmbSimpleDepth(args=args, size_out=64, train_decoder_only=True).to(device)
     else:
-        model = ModelEmb(args=args, size_out=64, train_decoder_only=False).to(device)
+        model = ModelEmb(args=args, size_out=64, train_decoder_only=True).to(device)
 
     state_dict = torch.load(args['path_best'])
     model.load_state_dict(state_dict)
