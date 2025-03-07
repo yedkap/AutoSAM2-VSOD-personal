@@ -251,7 +251,7 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         # out_mask_logits_cond.append(out_mask_logits_frame)
     # out_mask_logits_points = [out_mask_logits_frame_0]
     for frame_idx in range(1, num_frames):
-        dense_embeddings_frame = mask_frame[:, frame_idx].to(device=device)
+        mask_frame = mask_frame[:, frame_idx].to(device=device)
         # dense_embeddings_frame = None
         # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)]) #  cat batch_size
         # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
@@ -270,7 +270,7 @@ def sam_call(batched_input, sam, dense_embeddings, device):
     out_mask_logits_final = torch.stack(out_mask_logits_final, dim=1)
 
 
-    return out_mask_logits_final, None
+    return out_mask_logits_stage_1, None
 
 
 def main(args=None, sam_args=None, test_run=False):
