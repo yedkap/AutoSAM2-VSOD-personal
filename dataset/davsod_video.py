@@ -139,9 +139,6 @@ def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset=
         'normal': 'Normal-25',
         'hard': 'Difficult-20',
     }
-    
-    if dataset not in dataset_map:
-        raise ValueError(f"Invalid dataset selection: {dataset}. Choose from 'easy', 'normal', or 'hard'.")
 
     if dataset != 'all':
         dir_roots_test = [os.path.join(root_dir, f'DAVSOD/{dataset_map[dataset]}/')]
