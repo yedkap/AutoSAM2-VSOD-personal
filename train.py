@@ -348,6 +348,12 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
 
+    fp_load = args['fp_load']
+    if fp_load is not None:
+        state_dict = torch.load(fp_load)
+        model.load_state_dict(state_dict)
+        print(f'Trained AutoSAM2-VSOD weights loaded from {fp_load}')
+
     model_cfg = sam_args['fp_config']
     sam = build_sam2_video_predictor(model_cfg, sam_args['checkpoint'], device=device)
     sam.fill_hole_area = 0
@@ -443,6 +449,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+    parser.add_argument('--fp_load', default=None, type=str, help='path for loading existing trained AutoSAM2-VSOD weights')
     args = vars(parser.parse_args())
 
     args['decoder_only'] = args['decoder_only'] == 1
