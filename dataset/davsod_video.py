@@ -37,7 +37,7 @@ class DAVSODDataset(data.Dataset):
             #     mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
-        self.video_seqs = self.video_seqs[16:17]
+        self.video_seqs = self.video_seqs[np.array([len(vid_seq['imgs']) for vid_seq in self.video_seqs]).argmax():]
         # self.filter_files()
         self.size = len(self.video_seqs)
         self.train = train
