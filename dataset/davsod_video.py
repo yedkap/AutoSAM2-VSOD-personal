@@ -125,10 +125,10 @@ class DAVSODDataset(data.Dataset):
 
 def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, frame_skip_train=4, frame_skip_eval=4, add_depth=True):
     """Load training and testing datasets for DAVSOD as sequences"""
-    dir_root_train = os.path.join(root_dir, 'DAVSOD/Training Set/')
-    ds_train = DAVSODDataset(dir_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False, frame_skip=frame_skip_train, add_depth=add_depth)
-    dir_root_val = os.path.join(root_dir, 'DAVSOD/Validation Set/')
-    ds_val = DAVSODDataset(dir_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval, add_depth=add_depth)
+    dirs_root_train = [os.path.join(root_dir, 'DAVSOD/Training Set/')]
+    ds_train = DAVSODDataset(dirs_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False, frame_skip=frame_skip_train, add_depth=add_depth)
+    dirs_root_val = [os.path.join(root_dir, 'DAVSOD/Validation Set/')]
+    ds_val = DAVSODDataset(dirs_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval, add_depth=add_depth)
     return ds_train, ds_val
 
 
