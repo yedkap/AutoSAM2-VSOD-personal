@@ -37,7 +37,6 @@ class DAVSODDataset(data.Dataset):
                 mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
-        # self.video_seqs = self.video_seqs[np.array([len(vid_seq['imgs']) for vid_seq in self.video_seqs]).argmax():]
         # self.filter_files()
         self.size = len(self.video_seqs)
         self.train = train
@@ -103,7 +102,6 @@ class DAVSODDataset(data.Dataset):
 
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
-        print(imgs.shape)
         if not self.add_depth:
             return imgs, masks, original_sizes, image_sizes
         else:
