@@ -13,14 +13,16 @@ class DAVSODDataset(data.Dataset):
     DataLoader for DAVSOD dataset for video salient object detection (VSOD)
     """
 
-    def __init__(self, dir_roots, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1, add_depth=True):
+    def __init__(self, dir_roots, train=True, sam_trans=None, cutoff=None, len_seq=4, is_eval=False, frame_skip=1,
+                 add_depth=True):
         self.dir_roots = dir_roots
         self.len_seq = len_seq
         # self.images = [os.path.join(image_root, f) for f in os.listdir(image_root) if f.endswith(('.jpg', '.png'))]
         # self.gts = [os.path.join(gt_root, f) for f in os.listdir(gt_root) if f.endswith('.png')]
         self.video_dirs = []
         for dir_root in dir_roots:
-            self.video_dirs.extend(os.path.join(dir_root, d) for d in os.listdir(dir_root) if os.path.isdir(os.path.join(dir_root, d)))
+            self.video_dirs.extend(
+                os.path.join(dir_root, d) for d in os.listdir(dir_root) if os.path.isdir(os.path.join(dir_root, d)))
         self.frame_skip = frame_skip
 
         self.video_seqs = []
@@ -37,6 +39,7 @@ class DAVSODDataset(data.Dataset):
                 mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
+        # self.video_seqs = self.video_seqs[np.array([len(vid_seq['imgs']) for vid_seq in self.video_seqs]).argmax():]
         # self.filter_files()
         self.size = len(self.video_seqs)
         self.train = train
@@ -75,7 +78,8 @@ class DAVSODDataset(data.Dataset):
         original_sizes, image_sizes = [], []
         self.augmentations.set_rand_params()
         for ii in range(len_seq):
-            img_path, gt_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][idx_start + (ii * self.frame_skip)]
+            img_path, gt_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][
+                idx_start + (ii * self.frame_skip)]
             image = self.cv2_loader(img_path, is_mask=False)
             mask = self.cv2_loader(gt_path, is_mask=True)
 
@@ -102,6 +106,7 @@ class DAVSODDataset(data.Dataset):
 
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
+        print(imgs.shape)
         if not self.add_depth:
             return imgs, masks, original_sizes, image_sizes
         else:
@@ -123,17 +128,20 @@ class DAVSODDataset(data.Dataset):
         return self.size
 
 
-def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, frame_skip_train=4, frame_skip_eval=4, add_depth=True):
+def get_davsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, frame_skip_train=4, frame_skip_eval=4,
+                       add_depth=True):
     """Load training and testing datasets for DAVSOD as sequences"""
     dirs_root_train = [os.path.join(root_dir, 'DAVSOD/Training Set/')]
-    ds_train = DAVSODDataset(dirs_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False, frame_skip=frame_skip_train, add_depth=add_depth)
+    ds_train = DAVSODDataset(dirs_root_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False,
+                             frame_skip=frame_skip_train, add_depth=add_depth)
     dirs_root_val = [os.path.join(root_dir, 'DAVSOD/Validation Set/')]
-    ds_val = DAVSODDataset(dirs_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf, is_eval=True, frame_skip=frame_skip_eval, add_depth=add_depth)
+    ds_val = DAVSODDataset(dirs_root_val, train=False, sam_trans=sam_trans, cutoff=cutoff_eval, len_seq=np.inf,
+                           is_eval=True, frame_skip=frame_skip_eval, add_depth=add_depth)
     return ds_train, ds_val
 
 
 def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset='easy', add_depth=True):
-    """Load a DAVSOD test dataset as sequences."""    
+    """Load a DAVSOD test dataset as sequences."""
     dataset_map = {
         'easy': 'Easy-35',
         'normal': 'Normal-25',
@@ -146,11 +154,11 @@ def get_davsod_dataset_test(root_dir, sam_trans=None, cutoff_eval=None, dataset=
         dir_roots_test = []
         for folder in dataset_map.values():
             dir_roots_test.append(os.path.join(root_dir, f'DAVSOD/{folder}/'))
-    
+
     ds_test = DAVSODDataset(
         dir_roots_test, train=False, sam_trans=sam_trans,
         cutoff=cutoff_eval, len_seq=np.inf, is_eval=True,
         add_depth=add_depth
     )
-    
+
     return ds_test
