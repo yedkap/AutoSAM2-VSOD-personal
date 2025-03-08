@@ -106,7 +106,7 @@ class DAVSODDataset(data.Dataset):
 
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
-        print(imgs.shape)
+        # print(imgs.shape)
         if not self.add_depth:
             return imgs, masks, original_sizes, image_sizes
         else:
