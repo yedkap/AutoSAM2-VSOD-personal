@@ -32,11 +32,12 @@ class DAVSODDataset(data.Dataset):
             for img_file, gt_file in zip(img_files, mask_files):
                 assert os.path.basename(img_file) == os.path.basename(gt_file)
 
-            if cutoff is not None:
-                img_files = img_files[:(cutoff * self.frame_skip)]
-                mask_files = mask_files[:(cutoff * self.frame_skip)]
+            # if cutoff is not None:
+            #     img_files = img_files[:(cutoff * self.frame_skip)]
+            #     mask_files = mask_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files})
 
+        self.video_seqs = self.video_seqs[16:17]
         # self.filter_files()
         self.size = len(self.video_seqs)
         self.train = train
@@ -102,6 +103,7 @@ class DAVSODDataset(data.Dataset):
 
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
+        print(imgs.shape)
         if not self.add_depth:
             return imgs, masks, original_sizes, image_sizes
         else:
