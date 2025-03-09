@@ -250,7 +250,7 @@ def main(args=None, sam_args=None, test_run=False):
     # model.load_state_dict(state_dict)
     model1 = torch.load(args['path_best'], weights_only=False)
     model.load_state_dict(model1.state_dict())
-    torch.save(model1.state_dict())
+    torch.save(model1.state_dict(), args['path_best'])
     print('Trained weights loaded')
 
     model_cfg = sam_args['fp_config']
