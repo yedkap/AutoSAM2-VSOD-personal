@@ -246,11 +246,11 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=True).to(device)
 
-    # state_dict = torch.load(args['path_best'])
-    # model.load_state_dict(state_dict)
-    model1 = torch.load(args['path_best'], weights_only=False)
-    model.load_state_dict(model1.state_dict())
-    torch.save(model1.state_dict(), args['path_best'])
+    state_dict = torch.load(args['path_best'])
+    model.load_state_dict(state_dict)
+    # model1 = torch.load(args['path_best'], weights_only=False)
+    # model.load_state_dict(model1.state_dict())
+    # torch.save(model1.state_dict(), args['path_best'])
     print('Trained weights loaded')
 
     model_cfg = sam_args['fp_config']
