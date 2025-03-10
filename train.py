@@ -155,7 +155,7 @@ class Trainer(torch.utils.data.Dataset):
         self.num_outputs = 3
         self.use_depth = use_depth
 
-    def train_single_epoch(self, ds, model, sam, optimizer, transform, epoch, device, accumulation_steps,
+    def train_single_epoch(self, ds, model, sam, optimizer, epoch, device, accumulation_steps,
                            test_run=False):
         num_images = len(ds)
         denom = num_images // self.num_outputs
@@ -167,7 +167,7 @@ class Trainer(torch.utils.data.Dataset):
         if not os.path.isdir(train_dir):
             os.mkdir(train_dir)
         for ii, (imgs, gts, depth, original_szs, img_szs) in enumerate(pbar):
-            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
+            batch_size, seq_len, c, h, w = imgs.shape
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
@@ -224,7 +224,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         self.use_depth = use_depth
 
     @torch.inference_mode()
-    def inference_ds(self, ds, model, sam, transform, epoch, device):
+    def inference_ds(self, ds, model, sam, epoch, device):
         num_images = len(ds)
         denom = num_images // self.num_outputs
         pbar = tqdm(ds)
@@ -236,7 +236,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
         for ii, (imgs, gts, depth, original_szs, img_szs) in enumerate(pbar):
-            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
+            batch_size, seq_len, c, h, w = imgs.shape
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
@@ -259,12 +259,6 @@ class InferenceDataset(torch.utils.data.Dataset):
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings, device=device)
             masks = norm_batch(masks)
-            # input_size = tuple([int(x) for x in img_sz[0].squeeze().tolist()])
-            # original_size = tuple([int(x) for x in original_sz[0].squeeze().tolist()])
-            # masks = sam.postprocess_masks(masks, input_size=input_size, original_size=original_size)
-            # gts = sam.postprocess_masks(gts, input_size=input_size, original_size=original_size)
-            # masks = F.interpolate(masks, (self.Idim, self.Idim), mode='bilinear', align_corners=True)
-            # gts = F.interpolate(gts, (self.Idim, self.Idim), mode='nearest')
             masks[masks > 0.75] = 1
             masks[masks <= 0.75] = 0
             masks = unpad(masks, original_sz)
@@ -305,17 +299,11 @@ def sam_call(batched_input, sam, dense_embeddings, device):
             offload_video_to_cpu=False,
             offload_state_to_cpu=False,
         )
-    # fp = r'C:\Users\atara\Documents\datasets\test_folder'
-    # inference_state = sam.init_state(video_path=fp)
     out_mask_logits = []
     for frame_idx in range(num_frames):
-        input_images_frame = input_images[:, frame_idx]
         dense_embeddings_frame = dense_embeddings[:, frame_idx].to(device=device)
         input_points = None
         input_labels = None
-        # dense_embeddings_frame = None
-        # input_points = np.array([[[(W // 2 + 100), (H * (360 / 640)) // 2 - 100]] for _ in range(bs)]) #  cat batch_size
-        # input_labels = np.array([[1] for _ in range(bs)]) #  cat batch_size
         with torch.no_grad():
             _, out_objs_ids_frame, out_mask_logits_frame = sam.add_new_points_or_box(
                 inference_state=inference_state,
@@ -399,7 +387,7 @@ def main(args=None, sam_args=None, test_run=False):
     for epoch in range(int(args['epoches'])):
         current_lr = optimizer.param_groups[0]['lr']
         print(f'learning rate: {current_lr}')
-        trainer.train_single_epoch(ds, model.train(), sam, optimizer, transform, epoch, device,
+        trainer.train_single_epoch(ds, model.train(), sam, optimizer, epoch, device,
                                    accumulation_steps=args['accumulation_steps'], test_run=test_run)
         if scheduler is not None:
             scheduler.step()
@@ -407,7 +395,7 @@ def main(args=None, sam_args=None, test_run=False):
             torch.save(model.state_dict(), args['path_occasional'].format(epoch))
         if epoch % args['save_every'] == 0:
             with torch.no_grad():
-                f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, epoch, device)
+                f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, epoch, device)
                 if f_beta_val > best:
                     torch.save(model.state_dict(), args['path_best'])
                     best = f_beta_val

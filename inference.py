@@ -99,7 +99,7 @@ class InferenceDataset(torch.utils.data.Dataset):
         self.use_depth = use_depth
 
     @torch.inference_mode()
-    def inference_ds(self, ds, model, sam, transform, epoch, device):
+    def inference_ds(self, ds, model, sam, epoch, device):
         num_images = len(ds)
         denom = num_images // self.num_outputs
         pbar = tqdm(ds)
@@ -273,7 +273,7 @@ def main(args=None, sam_args=None, test_run=False):
     inference_ds = InferenceDataset(args, test_run, device, use_depth=args['use_depth'])
 
     with torch.no_grad():
-        f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, transform, 0, device)
+        f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, epoch=0, device=device)
         eval_dir = os.path.join(args['root_images_eval'], '0')
         np.savetxt(os.path.join(eval_dir, "f_betas.csv"), f_beta_all, delimiter=",")
 
@@ -283,7 +283,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('--root_data_dir', required=True, help='root data directory')
     parser.add_argument('--sam2_size', default='large', help='root data directory')
-    # parser.add_argument('--eval_dir_root', default='eval', help='root eval image directory')
     parser.add_argument('-nW', '--nW', default=0, help='num workers train', required=False)
     parser.add_argument('-nW_eval', '--nW_eval', default=0, help='num workers eval', required=False)
     parser.add_argument('-WD', '--WD', default=0, help='weight decay', required=False)  # 1e-4
