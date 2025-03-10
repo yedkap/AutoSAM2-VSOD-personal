@@ -7,11 +7,9 @@ from models.model_single import ModelEmb as ModelEmb
 from models.model_single import ModelEmbESA
 from models.model_single import ModelEmbSimpleDepth
 
-from segment_anything_1 import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from dataset.davsod_video import get_davsod_dataset_test
 from dataset.ViDSOD100 import get_vidsod_dataset_test
-from segment_anything_1.utils.transforms import ResizeLongestSide as ResizeLongestSide_sam1
-from sam2.build_sam import build_sam2, build_sam2_video_predictor
+from sam2.build_sam import build_sam2_video_predictor
 from utils import save_image
 import torch.nn.functional as F
 from train import get_input_dict, norm_batch, unpad
