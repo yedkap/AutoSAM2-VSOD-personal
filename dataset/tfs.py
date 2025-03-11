@@ -116,30 +116,6 @@ def get_polyp_transform():
     return transform_train, transform_test
 
 
-def add_salt_pepper_noise(img, prob=0.02):
-    """
-    Adds salt and pepper noise to an image.
-
-    Args:
-        img (Tensor): Image tensor (C, H, W) with values in [0, 1].
-        prob (float): Probability of noise for each pixel.
-
-    Returns:
-        Tensor: Noisy image.
-    """
-    img_np = np.array(img)  # Convert to NumPy array
-    c, h, w = img_np.shape
-    mask = np.random.rand(h, w)  # Generate random mask
-
-    salt_mask = mask < prob / 2
-    pepper_mask = mask > 1 - prob / 2
-
-    img_np[:, salt_mask] = 1  # Set salt pixels to 1
-    img_np[:, pepper_mask] = 0  # Set pepper pixels to 0
-
-    return torch.tensor(img_np, dtype=torch.float32)
-
-
 def salt_and_pepper_noise(img, prob=0.02):
     """Applies salt and pepper noise."""
     np_img = np.array(img)
@@ -158,7 +134,7 @@ def add_gaussian_noise(img, mean=0.0, std=0.05):
     """Applies Gaussian noise to a tensor."""
     img = np.array(img).astype(np.float32) / 255.
     noise = np.random.randn(*img.shape) * std + mean
-    img_noisy = np.clip(img + noise, a_min=.0, a_max=.1)
+    img_noisy = np.clip(img + noise, a_min=0., a_max=1.)
     img_noisy = (img_noisy * 255).astype(np.uint8)
     return Image.fromarray(img_noisy)
 
@@ -185,6 +161,8 @@ class DAVSODTransformVideo:
             "flip": self.rand_uniform() > 0.5,
             "angle": self.rand_uniform(-20, 20),
             "scale": self.rand_uniform(0.75, 1.25),
+            "add_gaussian": self.rand_uniform() > 0.5,
+            "add_salt_pepper":  self.rand_uniform() > 0.5,
         }
 
     def transform(self, frame, is_mask=False):
@@ -201,6 +179,10 @@ class DAVSODTransformVideo:
 
         if not self.is_eval:
             if not is_mask:
+                if self.params["add_gaussian"]:
+                    frame = add_gaussian_noise(frame)
+                if self.params["add_salt_pepper"]:
+                    frame = salt_and_pepper_noise(frame)
                 frame = F.adjust_brightness(frame, self.params["brightness_factor"])
                 frame = F.adjust_contrast(frame, self.params["contrast_factor"])
                 frame = F.adjust_saturation(frame, self.params["saturation_factor"])

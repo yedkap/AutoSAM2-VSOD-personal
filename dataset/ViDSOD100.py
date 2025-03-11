@@ -102,7 +102,7 @@ class VIDSODDataset(data.Dataset):
             img = self.augmentations.transform(image, is_mask=False) * 255
             mask = self.augmentations.transform(mask * 255, is_mask=True)
             depth = self.augmentations.transform(depth, is_mask=True)
-            depth = (((depth * 255) - 30) / 45)
+            depth = (((depth * 255) - 40) / 50)
 
 
             original_sizes.append(img.shape[-2:])
