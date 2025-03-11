@@ -156,8 +156,14 @@ def get_vidsod_dataset(root_dir, sam_trans=None, cutoff_eval=None, len_seq=4, fr
     total_size = len(video_dirs_all)
     size_val = int(0.15 * total_size)
     size_train = total_size - size_val
-
-    video_dirs_train, video_dirs_val = video_dirs_all[:size_train], video_dirs_all[size_train:]
+    freq_val = total_size // size_val
+    video_dirs_val = []
+    video_dirs_train = []
+    for ii in range(total_size):
+        if ii % freq_val == 0:
+            video_dirs_val.append(video_dirs_all[ii])
+        else:
+            video_dirs_train.append(video_dirs_all[ii])
 
     ds_train = VIDSODDataset(dir_root_train, video_dirs=video_dirs_train, sam_trans=sam_trans, len_seq=len_seq, is_eval=False,
                              frame_skip=frame_skip_train)
