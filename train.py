@@ -432,7 +432,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
-    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+    parser.add_argument('--use_esa', default=1, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
     parser.add_argument('--fp_load', default=None, type=str, help='path for loading existing trained AutoSAM2-VSOD weights')
     args = vars(parser.parse_args())
 
