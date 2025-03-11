@@ -355,7 +355,7 @@ def main(args=None, sam_args=None, test_run=False):
                                weight_decay=float(args['WD']))
     if args['lr_decay']:  # used to be if args['learning_rate_decay']:
         print('using learning rate decay')
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=1 / 3)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=1 / 3)
     else:
         print('using constant learning rate')
         scheduler = None
