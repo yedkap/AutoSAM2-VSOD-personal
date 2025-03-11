@@ -97,7 +97,7 @@ class ModelEmbSimpleDepth(nn.Module):
 
 
 class ModelEmbESA(nn.Module):
-    def __init__(self, args,size_out=64, train_decoder_only=None):#add a check for decoder only?
+    def __init__(self, args,size_out=64, train_decoder_only=None)
         super(ModelEmbESA, self).__init__()
         print('using ESA RGBD backbone')
         self.backbone = ImageEncoderRGB_D(
