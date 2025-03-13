@@ -362,10 +362,10 @@ def main(args=None, sam_args=None, test_run=False):
 
     if args['task'] == 'davsod':
         trainset, testset = get_davsod_dataset(args['root_data_dir'], sam_trans=transform,
-                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], add_depth=True)
+                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], frame_skip_train=1, frame_skip_eval=1, add_depth=True)
     elif args['task'] == 'VIDSOD':
         trainset, testset = get_vidsod_dataset(args['root_data_dir'], sam_trans=transform,
-                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'])
+                                               cutoff_eval=args['cutoff_eval'], len_seq=args['seq_len'], frame_skip_train=1, frame_skip_eval=1)
 
     else:
         raise Exception('unsupported task')
