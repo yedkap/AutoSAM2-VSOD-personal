@@ -42,12 +42,15 @@ class VIDSODDataset(data.Dataset):
                 if(os.path.basename(img_file) != os.path.basename(gt_file)):
                     if(cutoff is None):
                         cutoff=count
+                    else:
+                        cutoff = min(cutoff, count)
+
                 #assert os.path.basename(img_file) == os.path.basename(gt_file)
 
             if cutoff is not None:
-                img_files = img_files[1:(cutoff * self.frame_skip)]
-                mask_files = mask_files[1:(cutoff * self.frame_skip)]
-                depth_files= depth_files[1:(cutoff * self.frame_skip)]
+                img_files = img_files[:(cutoff * self.frame_skip)]
+                mask_files = mask_files[:(cutoff * self.frame_skip)]
+                depth_files= depth_files[:(cutoff * self.frame_skip)]
             self.video_seqs.append({'imgs': img_files, 'masks': mask_files, 'depth':depth_files})
 
         # self.filter_files()
