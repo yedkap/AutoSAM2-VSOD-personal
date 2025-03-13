@@ -81,14 +81,14 @@ class ModelEmbSimpleDepth(nn.Module):
         self.train_decoder_only = train_decoder_only
 
     def forward(self, img, depth_image):
-        depth_input = depth_image.repeat(1, 3, 1, 1)
+        # depth_input = depth_image.repeat(1, 3, 1, 1)
         # depth_input = self.depth_conv(depth_image)
         if self.train_decoder_only:
             with torch.no_grad():
                 z_img = self.backbone(img)
-                z_depth = self.backbone(depth_input)
+                z_depth = self.backbone(depth_image)
         else:
-            z_img = self.backbone(depth_input)
+            z_img = self.backbone(depth_image)
             z_depth = self.backbone(depth_image)
         z = [torch.cat((z_img_res, z_depth_res), dim=1) for z_img_res, z_depth_res in zip(z_img, z_depth)]
         dense_embeddings = self.decoder(z)

@@ -9,7 +9,7 @@ from models.model_single import ModelEmb as ModelEmb
 from models.model_single import ModelEmbESA
 from models.model_single import ModelEmbSimpleDepth
 from dataset.davsod_video import get_davsod_dataset
-from dataset.ViDSOD100 import get_vidsod_dataset
+from dataset.ViDSOD100_flow import get_vidsod_dataset
 from sam2.build_sam import build_sam2_video_predictor
 import torch.nn.functional as F
 from utils import save_image
@@ -127,6 +127,7 @@ def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
     # Normalize the input
     normalized_input = (model_input_rgb - pixel_mean) / pixel_std
+    model_input_depth = (model_input_depth - pixel_mean) / pixel_std
 
     num_frames = model_input_rgb.shape[1]
     outputs = []
@@ -178,7 +179,7 @@ class Trainer(torch.utils.data.Dataset):
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
                                              align_corners=True)
-            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 
             dense_embeddings = call_model(
                 model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth
@@ -246,7 +247,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
                                              align_corners=True)
-            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 
             dense_embeddings = call_model(
                 model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth
@@ -431,8 +432,8 @@ if __name__ == '__main__':
     parser.add_argument('--decoder_only', default=1, type=int, help='update only ModelEmb decoder')
     parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
-    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
-    parser.add_argument('--use_esa', default=1, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+    parser.add_argument('--use_depth', default=0, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
     parser.add_argument('--fp_load', default=None, type=str, help='path for loading existing trained AutoSAM2-VSOD weights')
     args = vars(parser.parse_args())
 
