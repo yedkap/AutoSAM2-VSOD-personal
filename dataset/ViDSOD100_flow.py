@@ -81,7 +81,7 @@ class VIDSODDataset(data.Dataset):
             idx_start = np.random.randint(0, len_video - (len_seq * self.frame_skip) + 1)
         else:
             len_seq = len_video // self.frame_skip
-            idx_start = 0
+            idx_start = 1
 
         imgs,depths, masks = [], [],[]
         original_sizes, image_sizes = [], []
