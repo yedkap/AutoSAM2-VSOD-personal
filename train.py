@@ -397,7 +397,7 @@ def main(args=None, sam_args=None, test_run=False):
                     torch.save(model.state_dict(), args['path_best'])
                     best = f_beta_val
                     print('best results: ' + str(best))
-                f_best.write(str(epoch) + ',' + str(best) + '\n')
+                f_best.write(str(epoch) + ',' + str(f_beta_val) + '\n')
                 f_best.flush()
             if test_run:
                 break
