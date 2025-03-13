@@ -374,7 +374,7 @@ def main(args=None, sam_args=None, test_run=False):
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
                                          num_workers=int(args['nW_eval']), drop_last=False)
     best = 0
-    path_best = 'results/gpu' + str(args['folder']) + '/best.csv'
+    path_best = 'results/gpu' + str(args['folder']) + '/validation.csv'
     f_best = open(path_best, 'w')
 
     trainer = Trainer(args, test_run, use_depth=args['use_depth'])
@@ -396,8 +396,8 @@ def main(args=None, sam_args=None, test_run=False):
                     torch.save(model.state_dict(), args['path_best'])
                     best = f_beta_val
                     print('best results: ' + str(best))
-                    f_best.write(str(epoch) + ',' + str(best) + '\n')
-                    f_best.flush()
+                f_best.write(str(epoch) + ',' + str(best) + '\n')
+                f_best.flush()
             if test_run:
                 break
 
