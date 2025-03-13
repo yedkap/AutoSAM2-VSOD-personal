@@ -177,7 +177,7 @@ class Trainer(torch.utils.data.Dataset):
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
-            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
                                              align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 
@@ -245,7 +245,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
-            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
                                              align_corners=True)
             depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 

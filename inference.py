@@ -126,7 +126,7 @@ class InferenceDataset(torch.utils.data.Dataset):
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
             depth_imgs_small = F.interpolate(depth_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
-            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 
             dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth)
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
