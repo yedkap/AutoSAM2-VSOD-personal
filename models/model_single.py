@@ -75,8 +75,12 @@ class ModelEmbSimpleDepth(nn.Module):
         self.backbone_1 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         self.backbone_2 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         d, f = self.backbone_1.full_features, self.backbone_1.features
+        assert d == self.backbone_2.full_features
+        assert f == self.backbone_2.features
         self.decoder = SmallDecoderSimpleDepth(d, out=256)
-        for param in self.backbone.parameters():
+        for param in self.backbone_1.parameters():
+            param.requires_grad = True
+        for param in self.backbone_2.parameters():
             param.requires_grad = True
         self.size_out = size_out
         self.train_decoder_only = train_decoder_only
