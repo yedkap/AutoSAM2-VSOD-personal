@@ -32,16 +32,18 @@ class VIDSODDataset(data.Dataset):
         for video_dir in self.video_dirs:
             img_dir = os.path.join(video_dir, "rgb")
             gt_dir = os.path.join(video_dir, "gt")
-            depth_dir = os.path.join(video_dir).replace(r'train', r'train_flow').replace(r'test', r'test_flow')
+            depth_dir = os.path.join(video_dir, "depth")
+            of_dir = os.path.join(video_dir).replace(r'train', r'train_flow').replace(r'test', r'test_flow')
             img_files = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.endswith('.png')])
             mask_files = sorted([os.path.join(gt_dir, f) for f in os.listdir(gt_dir) if f.endswith('.png')])
             depth_files = sorted([os.path.join(depth_dir, f) for f in os.listdir(gt_dir) if f.endswith('.png')])
+            of_files = sorted([os.path.join(of_dir, f) for f in os.listdir(gt_dir) if f.endswith('.png')])
             count=0
-            for img_file, gt_file, depth_file in zip(img_files, mask_files, depth_files):
+            for img_file, gt_file, depth_file, of_file in zip(img_files, mask_files, depth_files, of_files):
                 count=count+1
                 if(os.path.basename(img_file) != os.path.basename(gt_file)):
                     if(cutoff is None):
-                        cutoff=count
+                        cutoff = count
                     else:
                         cutoff = min(cutoff, count)
 
@@ -51,7 +53,8 @@ class VIDSODDataset(data.Dataset):
                 img_files = img_files[:(cutoff * self.frame_skip)]
                 mask_files = mask_files[:(cutoff * self.frame_skip)]
                 depth_files= depth_files[:(cutoff * self.frame_skip)]
-            self.video_seqs.append({'imgs': img_files, 'masks': mask_files, 'depth':depth_files})
+                of_files= of_files[:(cutoff * self.frame_skip)]
+            self.video_seqs.append({'imgs': img_files, 'masks': mask_files, 'depth':depth_files, 'of':of_files})
 
         # self.filter_files()
         self.size = len(self.video_seqs)
@@ -62,7 +65,7 @@ class VIDSODDataset(data.Dataset):
         self.is_eval = is_eval
         self.augmentations = DAVSODTransformVideo(is_eval=is_eval)
 
-    def pad_to_square(self, x: torch.Tensor, is_mask: bool = False) -> torch.Tensor:
+    def pad_to_square(self, x: torch.Tensor) -> torch.Tensor:
         """pad to a square input."""
         h, w = x.shape[-2:]
         assert h == self.im_h and w == self.im_w
@@ -86,15 +89,16 @@ class VIDSODDataset(data.Dataset):
             len_seq = len_video // self.frame_skip
             idx_start = 0
 
-        imgs,depths, masks = [], [],[]
+        imgs, depths, ofs, masks = [], [], [], []
         original_sizes, image_sizes = [], []
         self.augmentations.set_rand_params()
         for ii in range(len_seq):
-            img_path, gt_path, depth_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][
-                idx_start + (ii * self.frame_skip)],video['depth'][idx_start + (ii * self.frame_skip)]
+            img_path, gt_path, depth_path, of_path = video['imgs'][idx_start + (ii * self.frame_skip)], video['masks'][
+                idx_start + (ii * self.frame_skip)], video['depth'][idx_start + (ii * self.frame_skip)], video['of'][idx_start + (ii * self.frame_skip)]
             image = self.cv2_loader(img_path, is_mask=False)
             mask = self.cv2_loader(gt_path, is_mask=True)
-            depth = self.cv2_loader(depth_path, is_mask=False, is_depth=False) #changed is_mask to True
+            depth = self.cv2_loader(depth_path, is_mask=False, is_depth=True)
+            of = self.cv2_loader(depth_path, is_mask=False)
 
             # depth_min = np.min(depth)
             # depth_max = np.max(depth)
@@ -102,10 +106,11 @@ class VIDSODDataset(data.Dataset):
             # depth = (depth - (30 / 255)) / (45 / 255)
             # depth = (depth - 50 / 255) / (70 / 255)
 
-            img = self.augmentations.transform(image, is_mask=False) * 255
-            mask = self.augmentations.transform(mask * 255, is_mask=True)
-            depth = self.augmentations.transform(depth, is_mask=True) * 255
-            # depth = (((depth * 255) - 40) / 50)
+            img = self.augmentations.transform(image, is_not_rgb=False) * 255
+            mask = self.augmentations.transform(mask * 255, is_not_rgb=True)
+            depth = self.augmentations.transform(depth, is_not_rgb=True)
+            depth = (((depth * 255) - 40) / 50)
+            of = self.augmentations.transform(of, is_not_rgb=True) * 255
 
 
             original_sizes.append(img.shape[-2:])
@@ -115,19 +120,21 @@ class VIDSODDataset(data.Dataset):
             image_sizes.append(image_size)
 
             imgs.append(self.pad_to_square(img))
-            masks.append(self.pad_to_square(mask, is_mask=True))
-            depths.append(self.pad_to_square(depth, is_mask=True))
+            masks.append(self.pad_to_square(mask))
+            depths.append(self.pad_to_square(depth))
+            ofs.append(self.pad_to_square(of))
 
         imgs = torch.stack(imgs, dim=0)
         masks = torch.stack(masks, dim=0)
         depths = torch.stack(depths, dim=0)
+        ofs = torch.stack(ofs, dim=0)
         original_sizes = torch.tensor(original_sizes)
         image_sizes = torch.tensor(image_sizes)
 
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
 
-        return imgs, masks, depths, original_sizes, image_sizes
+        return imgs, masks, depths, ofs, original_sizes, image_sizes
 
     @staticmethod
     def cv2_loader(path, is_mask, is_depth=False):

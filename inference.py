@@ -12,7 +12,7 @@ from dataset.ViDSOD100_flow import get_vidsod_dataset_test
 from sam2.build_sam import build_sam2_video_predictor
 from utils import save_image
 import torch.nn.functional as F
-from train import get_input_dict, norm_batch, unpad
+from train import get_input_dict, norm_batch, unpad, ModelWrapper
 
 
 def get_dice_ji(predict_scores, target_in, smooth=1e-8):
@@ -65,37 +65,13 @@ def open_folder(path):
 #     return masks, ious
 
 
-def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
-    # Define pixel mean and std as tensors
-    pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
-    pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
-    # Normalize the input
-    normalized_input = (model_input_rgb - pixel_mean) / pixel_std
-    model_input_depth = (model_input_depth - pixel_mean) / pixel_std
-
-    num_frames = model_input_rgb.shape[1]
-    outputs = []
-    for idx_frame in range(num_frames):
-        normalized_input_frame = normalized_input[:, idx_frame]
-        depth_frame= model_input_depth[:,idx_frame]
-        if use_depth:
-            output = model(normalized_input_frame, depth_frame)
-        else:
-            output = model(normalized_input_frame)
-        outputs.append(output.cpu())
-    outputs = torch.stack(outputs, dim=1)
-
-    return outputs
-
-
 class InferenceDataset(torch.utils.data.Dataset):
-    def __init__(self, args, test_run, device, use_depth=True):
+    def __init__(self, args, model_wrapper, test_run=False):
         self.eval_root = args['root_images_eval']
         self.Idim = int(args['Idim'])
         self.test_run = test_run
         self.num_outputs = 5
-        self.device=device
-        self.use_depth = use_depth
+        self.model_wrapper = model_wrapper
 
     @torch.inference_mode()
     def inference_ds(self, ds, model, sam, epoch, device):
@@ -111,24 +87,34 @@ class InferenceDataset(torch.utils.data.Dataset):
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
-        for ii, (imgs, gts, depth, original_szs, img_szs) in enumerate(pbar):
-            batch_size, seq_len, c, h, w = imgs.shape  # images have shape [B, T, C, H, W]
+        for ii, (imgs, gts, depth, of, original_szs, img_szs) in enumerate(pbar):
+            batch_size, seq_len, c, h, w = imgs.shape
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
-
+            depth_imgs = depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            depth_imgs = depth.to(device)
-            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear', align_corners=True)
-            orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
-            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
-                                            align_corners=True)
-            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
+            of_imgs = of.to(device)
 
-            dense_embeddings = call_model(model, orig_imgs_small, depth_imgs_small, device=device, use_depth=self.use_depth)
+            orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                            align_corners=True)
+            orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
+
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                             align_corners=True)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+
+            of_imgs_small = F.interpolate(of_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                             align_corners=True)
+            of_imgs_small = of_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
+
+            dense_embeddings = self.model_wrapper(
+                model, orig_imgs_small, depth_imgs_small, of_imgs_small, device=device,
+            )
+
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
             masks, _ = sam_call(batched_input, sam, dense_embeddings, device)
             masks = norm_batch(masks)
@@ -237,13 +223,19 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
 
-    if args['use_depth']:
+    if args['use_depth'] or args['use_optical_flow']:
         if args['use_esa']:
-            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=True).to(device)
+            model = ModelEmbESA(args=args, size_out=64, train_decoder_only=False).to(device)
         else:
-            model = ModelEmbSimpleDepth(args=args, size_out=64, train_decoder_only=True).to(device)
+            if args['use_depth']:
+                secondary_input_type = 'depth'
+            else:
+                secondary_input_type = 'optical_flow'
+            model = ModelEmbSimpleDepth(
+                args=args, secondary_input_type=secondary_input_type, size_out=64, train_decoder_only=False
+            ).to(device)
     else:
-        model = ModelEmb(args=args, size_out=64, train_decoder_only=True).to(device)
+        model = ModelEmb(args=args, size_out=64, train_decoder_only=False).to(device)
 
     state_dict = torch.load(args['path_best'])
     model.load_state_dict(state_dict)
@@ -269,7 +261,8 @@ def main(args=None, sam_args=None, test_run=False):
     ds_val = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False,
                                          num_workers=int(args['nW_eval']), drop_last=False)
 
-    inference_ds = InferenceDataset(args, test_run, device, use_depth=args['use_depth'])
+    model_wrapper = ModelWrapper(use_depth=args['use_depth'], use_optical_flow=args['use_optical_flow'],)
+    inference_ds = InferenceDataset(args, model_wrapper=model_wrapper, test_run=test_run)
 
     with torch.no_grad():
         f_beta_max, f_beta_all = inference_ds.inference_ds(ds_val, model.eval(), sam, epoch=0, device=device)
@@ -294,12 +287,19 @@ if __name__ == '__main__':
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     parser.add_argument('--dataset', default='all', help='test dataset. easy, normal, hard, vidsod')
     parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_optical_flow', default=0, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
 
     args = vars(parser.parse_args())
 
     args['use_depth'] = args['use_depth'] == 1
+    args['use_optical_flow'] = args['use_optical_flow'] == 1
     args['test_run'] = args['test_run'] == 1
+
+    if args['use_optical_flow']:
+        assert not args['use_depth']
+        assert not args['use_esa']
+
     os.makedirs('results_test', exist_ok=True)
     folder_load = args['folder']
     args['results_root'] = open_folder('results_test')

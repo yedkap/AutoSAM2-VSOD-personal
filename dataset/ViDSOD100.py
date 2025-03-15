@@ -99,9 +99,9 @@ class VIDSODDataset(data.Dataset):
             # depth = (depth - (30 / 255)) / (45 / 255)
             # depth = (depth - 50 / 255) / (70 / 255)
 
-            img = self.augmentations.transform(image, is_mask=False) * 255
-            mask = self.augmentations.transform(mask * 255, is_mask=True)
-            depth = self.augmentations.transform(depth, is_mask=True)
+            img = self.augmentations.transform(image, is_not_rgb=False) * 255
+            mask = self.augmentations.transform(mask * 255, is_not_rgb=True)
+            depth = self.augmentations.transform(depth, is_not_rgb=True)
             depth = (((depth * 255) - 40) / 50)
 
 

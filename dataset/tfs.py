@@ -165,20 +165,20 @@ class DAVSODTransformVideo:
             "add_salt_pepper":  self.rand_uniform() > 0.5,
         }
 
-    def transform(self, frame, is_mask=False):
+    def transform(self, frame, is_not_rgb):
         """
         Apply the stored transformation parameters to a frame.
 
         Args:
             frame: A tensor or PIL image.
-            is_mask (bool): If True, skip color adjustments.
+            is_not_rgb (bool): If True, skip color adjustments.
         """
         if self.params is None:
             raise ValueError("Call set_rand_params() before using transform().")
         frame = F.to_pil_image(frame)
 
         if not self.is_eval:
-            if not is_mask:
+            if not is_not_rgb:
                 if self.params["add_gaussian"]:
                     frame = add_gaussian_noise(frame)
                 if self.params["add_salt_pepper"]:

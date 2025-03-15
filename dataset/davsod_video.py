@@ -83,8 +83,8 @@ class DAVSODDataset(data.Dataset):
             image = self.cv2_loader(img_path, is_mask=False)
             mask = self.cv2_loader(gt_path, is_mask=True)
 
-            img = self.augmentations.transform(image, is_mask=False) * 255
-            mask = self.augmentations.transform(mask * 255, is_mask=True)
+            img = self.augmentations.transform(image, is_not_rgb=False) * 255
+            mask = self.augmentations.transform(mask * 255, is_not_rgb=True)
 
             original_sizes.append(img.shape[-2:])
             if self.sam2_trans is not None:
@@ -110,9 +110,10 @@ class DAVSODDataset(data.Dataset):
         if not self.add_depth:
             return imgs, masks, original_sizes, image_sizes
         else:
-            # Creates fake depth input
+            # Creates fake depth and optical flow inputs
             depths = torch.zeros_like(masks)
-            return imgs, masks, depths, original_sizes, image_sizes
+            ofs = torch.zeros_like(imgs)
+            return imgs, masks, depths, ofs, original_sizes, image_sizes
 
     @staticmethod
     def cv2_loader(path, is_mask):

@@ -67,7 +67,7 @@ class ModelEmb(nn.Module):
 
 
 class ModelEmbSimpleDepth(nn.Module):
-    def __init__(self, args, size_out=64, train_decoder_only=False):
+    def __init__(self, args, secondary_input_type, size_out=64, train_decoder_only=False):
         super(ModelEmbSimpleDepth, self).__init__()
         print('using simple depth integration as greyscale input')
         print('using HarDNet backbone')
@@ -79,17 +79,22 @@ class ModelEmbSimpleDepth(nn.Module):
             param.requires_grad = True
         self.size_out = size_out
         self.train_decoder_only = train_decoder_only
+        self.secondary_input_type = secondary_input_type
+        assert secondary_input_type in ['depth', 'optical_flow']
 
-    def forward(self, img, depth_image):
-        # depth_input = depth_image.repeat(1, 3, 1, 1)
-        # depth_input = self.depth_conv(depth_image)
+    def forward(self, img, depth_image=None, optical_flow=None):
+        if self.secondary_input_type == 'depth':
+            secondary_input = depth_image.repeat(1, 3, 1, 1)
+            # depth_input = self.depth_conv(depth_image)
+        else:
+            secondary_input = optical_flow
         if self.train_decoder_only:
             with torch.no_grad():
                 z_img = self.backbone(img)
-                z_depth = self.backbone(depth_image)
+                z_depth = self.backbone(secondary_input)
         else:
-            z_img = self.backbone(depth_image)
-            z_depth = self.backbone(depth_image)
+            z_img = self.backbone(img)
+            z_depth = self.backbone(secondary_input)
         z = [torch.cat((z_img_res, z_depth_res), dim=1) for z_img_res, z_depth_res in zip(z_img, z_depth)]
         dense_embeddings = self.decoder(z)
         dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear', align_corners=True)
