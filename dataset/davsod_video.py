@@ -107,15 +107,12 @@ class DAVSODDataset(data.Dataset):
         assert torch.all(original_sizes == original_sizes[0])
         assert torch.all(image_sizes == image_sizes[0])
         # print(imgs.shape)
-        if not self.add_depth:
-            return imgs, masks, original_sizes, image_sizes
-        else:
-            # Creates fake depth and optical flow inputs
-            # depths = torch.zeros_like(masks)
-            # ofs = torch.zeros_like(imgs)
-            depths = None
-            ofs = None
-            return imgs, masks, depths, ofs, original_sizes, image_sizes
+        return imgs, masks, original_sizes, image_sizes
+        # else:
+        #     # Creates fake depth and optical flow inputs
+        #     depths = torch.zeros_like(masks)
+        #     ofs = torch.zeros_like(imgs)
+        #     return imgs, masks, depths, ofs, original_sizes, image_sizes
 
     @staticmethod
     def cv2_loader(path, is_mask):
