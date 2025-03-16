@@ -172,7 +172,7 @@ class ModelWrapper:
                 output = model(normalized_rgb_frame, depth_image=depth_frame)
             else:
                 output = model(normalized_rgb_frame)
-            outputs.append(output)
+            outputs.append(output.cpu())
 
         outputs = torch.stack(outputs, dim=1)
         return outputs
@@ -341,8 +341,8 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         bs, num_frames, c, H, W = input_images.shape
         inference_state = sam.init_state(
             images_in=input_images.permute(1, 0, 2, 3, 4),
-            offload_video_to_cpu=False,
-            offload_state_to_cpu=False,
+            offload_video_to_cpu=True,
+            offload_state_to_cpu=True,
         )
     out_mask_logits = []
     for frame_idx in range(num_frames):
