@@ -94,23 +94,23 @@ class InferenceDataset(torch.utils.data.Dataset):
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
-            depth_imgs = depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            of_imgs = of.to(device)
 
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
 
-            if depth_imgs is not None:
+            if depth is not None:
+                depth_imgs = depth.to(device)
                 depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
                                                  align_corners=True)
                 depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
             else:
                 depth_imgs_small = None
 
-            if of_imgs is not None:
+            if of is not None:
+                of_imgs = of.to(device)
                 of_imgs_small = F.interpolate(of_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
                                                  align_corners=True)
                 of_imgs_small = of_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
