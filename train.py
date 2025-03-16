@@ -214,13 +214,19 @@ class Trainer(torch.utils.data.Dataset):
                                             align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
 
-            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
-                                             align_corners=True)
-            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+            if depth_imgs is not None:
+                depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                                 align_corners=True)
+                depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+            else:
+                depth_imgs_small = None
 
-            of_imgs_small = F.interpolate(of_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
-                                             align_corners=True)
-            of_imgs_small = of_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
+            if of_imgs is not None:
+                of_imgs_small = F.interpolate(of_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                                 align_corners=True)
+                of_imgs_small = of_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
+            else:
+                of_imgs_small = None
 
             dense_embeddings = self.model_wrapper(
                 model, orig_imgs_small, depth_imgs_small, of_imgs_small, device=device,

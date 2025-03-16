@@ -187,6 +187,48 @@ class ModelEmbSimpleFusion(nn.Module):
         return dense_embeddings
 
 
+class ModelEmbFusionLarge(nn.Module):
+    def __init__(self, args, size_out=64, train_decoder_only=False):
+        super(ModelEmbFusionLarge, self).__init__()
+        print('using simple depth integration as greyscale input')
+        print('using HarDNet backbone')
+        # self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
+        self.backbone_1 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
+        self.backbone_2 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
+        self.backbone_3 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
+        d = [
+            1, self.backbone_1.encoder_rgb.down_4_channels_out,
+            self.backbone_1.encoder_rgb.down_8_channels_out,
+            self.backbone_1.encoder_rgb.down_16_channels_out
+        ]
+        d_in = [feature * 3 for feature in d]
+        d_reduced = d
+        self.decoder = SmallDecoderSimpleFusion(d_in, out=256, full_features_reduced=d_reduced)
+        for param in self.backbone_1.parameters():
+            param.requires_grad = True
+        for param in self.backbone_2.parameters():
+            param.requires_grad = True
+        self.size_out = size_out
+        self.train_decoder_only = train_decoder_only
+
+    def forward(self, img, depth_image, optical_flow_image):
+        if self.train_decoder_only:
+            with torch.no_grad():
+                z_rgb = self.backbone_1(img)
+                z_depth = self.backbone_1(depth_image)
+                z_of = self.backbone_3(optical_flow_image)
+        else:
+            z_rgb = self.backbone_1(img)
+            z_depth = self.backbone_1(depth_image)
+            z_of = self.backbone_3(optical_flow_image)
+        z = [torch.cat((z_esa_res, z_of_res), dim=1) for z_esa_res, z_of_res in zip(z_esa[1:4], z_of[1:4])]
+        z = [None, *z]
+        dense_embeddings = self.decoder(z)
+        dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear',
+                                         align_corners=True)
+        return dense_embeddings
+
+
 class ModelEmbESA(nn.Module):
     def __init__(self, args,size_out=64, train_decoder_only=None):
         super(ModelEmbESA, self).__init__()
