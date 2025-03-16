@@ -87,23 +87,32 @@ class InferenceDataset(torch.utils.data.Dataset):
         eval_dir = os.path.join(self.eval_root, str(epoch))
         if not os.path.isdir(eval_dir):
             os.mkdir(eval_dir)
-        for ii, (imgs, gts, original_szs, img_szs) in enumerate(pbar):
+        for ii, (imgs, gts, depth, of, original_szs, img_szs) in enumerate(pbar):
             batch_size, seq_len, c, h, w = imgs.shape
 
             assert torch.all(original_szs == original_szs[0, 0])
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
+            depth_imgs = depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
+            of_imgs = of.to(device)
 
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
             orig_imgs_small = orig_imgs_small.view(batch_size, seq_len, c, self.Idim, self.Idim)
 
+            depth_imgs_small = F.interpolate(depth_imgs.view(-1, 1, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                             align_corners=True)
+            depth_imgs_small = depth_imgs_small.view(batch_size, seq_len, 1, self.Idim, self.Idim)
+
+            of_imgs_small = F.interpolate(of_imgs.view(-1, 3, h, w), (self.Idim, self.Idim), mode='bilinear',
+                                             align_corners=True)
+            of_imgs_small = of_imgs_small.view(batch_size, seq_len, 3, self.Idim, self.Idim)
 
             dense_embeddings = self.model_wrapper(
-                model, orig_imgs_small, None, None, device=device,
+                model, orig_imgs_small, depth_imgs_small, of_imgs_small, device=device,
             )
 
             batched_input = get_input_dict(orig_imgs, original_sz, img_sz)
@@ -162,9 +171,9 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
         bs, num_frames, c, H, W = input_images.shape
         inference_state = sam.init_state(
-            images_in=input_images.permute(1, 0, 2, 3, 4).cpu(),
-            offload_video_to_cpu=True,
-            offload_state_to_cpu=True,
+            images_in=input_images.permute(1, 0, 2, 3, 4),
+            offload_video_to_cpu=False,
+            offload_state_to_cpu=False,
         )
     input_points = None
     input_labels = None
