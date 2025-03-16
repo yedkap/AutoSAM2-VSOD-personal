@@ -5,7 +5,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
 from models.model_single import ModelEmbESA
-from models.model_single import ModelEmbSimpleDepth
+from models.model_single import ModelEmbSimpleFusion
 
 from dataset.davsod_video import get_davsod_dataset_test
 from dataset.ViDSOD100_flow import get_vidsod_dataset_test
@@ -223,17 +223,13 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
 
-    if args['use_depth'] or args['use_optical_flow']:
+    if args['use_optical_flow']:
+        model = ModelEmbSimpleFusion(
+            args=args, size_out=64, train_decoder_only=False
+        ).to(device)
+    elif args['use_depth']:
         if args['use_esa']:
             model = ModelEmbESA(args=args, size_out=64, train_decoder_only=False).to(device)
-        else:
-            if args['use_depth']:
-                secondary_input_type = 'depth'
-            else:
-                secondary_input_type = 'optical_flow'
-            model = ModelEmbSimpleDepth(
-                args=args, secondary_input_type=secondary_input_type, size_out=64, train_decoder_only=False
-            ).to(device)
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=False).to(device)
 
@@ -286,9 +282,9 @@ if __name__ == '__main__':
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.', required=False)
     parser.add_argument('-folder', '--folder', help='image size', required=True)
     parser.add_argument('--dataset', default='all', help='test dataset. easy, normal, hard, vidsod')
-    parser.add_argument('--use_depth', default=0, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     parser.add_argument('--use_optical_flow', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
-    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+    parser.add_argument('--use_esa', default=1, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
 
     args = vars(parser.parse_args())
 
@@ -297,8 +293,8 @@ if __name__ == '__main__':
     args['test_run'] = args['test_run'] == 1
 
     if args['use_optical_flow']:
-        assert not args['use_depth']
-        assert not args['use_esa']
+        assert args['use_depth']
+        assert args['use_esa']
 
     os.makedirs('results_test', exist_ok=True)
     folder_load = args['folder']
