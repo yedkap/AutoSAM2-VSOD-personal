@@ -108,9 +108,9 @@ class ModelEmbSimpleDepth(nn.Module):
         return dense_embeddings
 
 
-class ModelEmbSimpleFusion(nn.Module):
+class ModelEmbFusion(nn.Module):
     def __init__(self, args, size_out=64, train_decoder_only=False):
-        super(ModelEmbSimpleFusion, self).__init__()
+        super(ModelEmbFusion, self).__init__()
         print('using simple depth integration as greyscale input')
         print('using HarDNet backbone')
         # self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
@@ -144,6 +144,46 @@ class ModelEmbSimpleFusion(nn.Module):
         z = [None, *z]
         dense_embeddings = self.decoder(z)
         dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear', align_corners=True)
+        return dense_embeddings
+
+
+class ModelEmbSimpleFusion(nn.Module):
+    def __init__(self, args, size_out=64, train_decoder_only=False):
+        super(ModelEmbSimpleFusion, self).__init__()
+        print('using simple depth integration as greyscale input')
+        print('using HarDNet backbone')
+        # self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
+        self.backbone_1 = ImageEncoderRGB_D(pretrained=True)
+        self.backbone_2 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
+        d_1 = [
+            1, self.backbone_1.encoder_rgb.down_4_channels_out,
+            self.backbone_1.encoder_rgb.down_8_channels_out,
+            self.backbone_1.encoder_rgb.down_16_channels_out
+        ]
+        d_2 = self.backbone_2.full_features
+        d = [feature_1 + feature_2 for feature_1, feature_2 in zip(d_1, d_2)]
+        d_reduced = [max(feature_1, feature_2) for feature_1, feature_2 in zip(d_1, d_2)]
+        self.decoder = SmallDecoderSimpleFusion(d, out=256, full_features_reduced=d_reduced)
+        for param in self.backbone_1.parameters():
+            param.requires_grad = True
+        for param in self.backbone_2.parameters():
+            param.requires_grad = True
+        self.size_out = size_out
+        self.train_decoder_only = train_decoder_only
+
+    def forward(self, img, depth_image, optical_flow_image):
+        if self.train_decoder_only:
+            with torch.no_grad():
+                z_esa = self.backbone_1(optical_flow_image, depth_image)
+                z_of = self.backbone_2(img)
+        else:
+            z_esa = self.backbone_1(optical_flow_image, depth_image)
+            z_of = self.backbone_2(img)
+        z = [torch.cat((z_esa_res, z_of_res), dim=1) for z_esa_res, z_of_res in zip(z_esa[1:4], z_of[1:4])]
+        z = [None, *z]
+        dense_embeddings = self.decoder(z)
+        dense_embeddings = F.interpolate(dense_embeddings, (self.size_out, self.size_out), mode='bilinear',
+                                         align_corners=True)
         return dense_embeddings
 
 
