@@ -162,7 +162,7 @@ def sam_call(batched_input, sam, dense_embeddings, device):
         input_images = torch.stack([x["image"] / 255 for x in batched_input], dim=0)
         bs, num_frames, c, H, W = input_images.shape
         inference_state = sam.init_state(
-            images_in=input_images.permute(1, 0, 2, 3, 4),
+            images_in=input_images.permute(1, 0, 2, 3, 4).cpu(),
             offload_video_to_cpu=True,
             offload_state_to_cpu=True,
         )
