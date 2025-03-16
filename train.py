@@ -6,8 +6,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
-from models.model_single import ModelEmbESA
-from models.model_single import ModelEmbSimpleDepth
+from models.model_single import ModelEmbESA, ModelEmbSimpleDepth, ModelEmbSimpleFusion
 from dataset.davsod_video import get_davsod_dataset
 from dataset.ViDSOD100_flow import get_vidsod_dataset
 from sam2.build_sam import build_sam2_video_predictor
@@ -148,7 +147,7 @@ class ModelWrapper:
     def __init__(self, use_optical_flow, use_depth):
         self.use_optical_flow = use_optical_flow
         self.use_depth = use_depth
-        assert not (self.use_optical_flow and self.use_depth)
+        assert not (self.use_optical_flow and (not self.use_depth))
 
     def normalize_color(self, image, device):
         pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 1, 3, 1, 1)
@@ -164,8 +163,10 @@ class ModelWrapper:
         for idx_frame in range(num_frames):
             normalized_rgb_frame = normalized_rgb[:, idx_frame]
             if self.use_optical_flow:
+                assert self.use_depth
+                depth_frame = model_input_depth[:, idx_frame]
                 flow_frame = normalized_flow[:, idx_frame]
-                output = model(normalized_rgb_frame, optical_flow=flow_frame)
+                output = model(normalized_rgb_frame, depth_image=depth_frame, optical_flow_image=flow_frame)
             elif self.use_depth:
                 depth_frame = model_input_depth[:, idx_frame]
                 output = model(normalized_rgb_frame, depth_image=depth_frame)
@@ -371,18 +372,13 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-
-    if args['use_depth'] or args['use_optical_flow']:
+    if args['use_optical_flow']:
+        model = ModelEmbSimpleFusion(
+            args=args, size_out=64, train_decoder_only=args['decoder_only']
+        ).to(device)
+    elif args['use_depth']:
         if args['use_esa']:
             model = ModelEmbESA(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
-        else:
-            if args['use_depth']:
-                secondary_input_type = 'depth'
-            else:
-                secondary_input_type = 'optical_flow'
-            model = ModelEmbSimpleDepth(
-                args=args, secondary_input_type=secondary_input_type, size_out=64, train_decoder_only=args['decoder_only']
-            ).to(device)
     else:
         model = ModelEmb(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
 
@@ -486,9 +482,9 @@ if __name__ == '__main__':
     parser.add_argument('--decoder_only', default=0, type=int, help='update only ModelEmb decoder')
     parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
     parser.add_argument('--seed', default=0, type=int, help='random seed.')
-    parser.add_argument('--use_depth', default=0, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
+    parser.add_argument('--use_depth', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
     parser.add_argument('--use_optical_flow', default=1, type=int, help='If 1, uses RGBD backbone for the prompt encoder')
-    parser.add_argument('--use_esa', default=0, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
+    parser.add_argument('--use_esa', default=1, type=int, help='If 1, uses RGBD ESA-Net for RGBD encoder')
     parser.add_argument('--fp_load', default=None, type=str, help='path for loading existing trained AutoSAM2-VSOD weights')
     args = vars(parser.parse_args())
 
@@ -500,8 +496,8 @@ if __name__ == '__main__':
     args['use_esa'] = args['use_esa'] == 1
 
     if args['use_optical_flow']:
-        assert not args['use_depth']
-        assert not args['use_esa']
+        assert args['use_depth']
+        assert args['use_esa']
 
     os.makedirs('results', exist_ok=True)
     folder = open_folder('results')
