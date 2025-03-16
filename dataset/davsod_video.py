@@ -111,8 +111,8 @@ class DAVSODDataset(data.Dataset):
             return imgs, masks, original_sizes, image_sizes
         else:
             # Creates fake depth and optical flow inputs
-            depths = torch.zeros_like(masks)
-            ofs = torch.zeros_like(imgs)
+            depths = torch.zeros_like(masks[..., :0, :, :])
+            ofs = torch.zeros_like(imgs[..., :0, :, :])
             return imgs, masks, depths, ofs, original_sizes, image_sizes
 
     @staticmethod
