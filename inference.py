@@ -94,10 +94,8 @@ class InferenceDataset(torch.utils.data.Dataset):
             assert torch.all(img_szs == img_szs[0, 0])
             img_sz = img_szs[:, 0]
             original_sz = original_szs[:, 0]
-            depth_imgs = depth.to(device)
             orig_imgs = imgs.to(device)
             gts = gts.to(device)
-            of_imgs = of.to(device)
 
             orig_imgs_small = F.interpolate(orig_imgs.view(-1, c, h, w), (self.Idim, self.Idim), mode='bilinear',
                                             align_corners=True)
