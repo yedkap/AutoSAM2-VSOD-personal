@@ -224,7 +224,7 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_optical_flow']:
-        model = ModelEmbFusionLarge(
+        model = ModelEmbSimpleFusion(
             args=args, size_out=64, train_decoder_only=False
         ).to(device)
     elif args['use_depth']:
