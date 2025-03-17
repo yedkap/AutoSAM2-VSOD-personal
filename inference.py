@@ -5,7 +5,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
 from models.model_single import ModelEmbESA
-from models.model_single import ModelEmbSimpleFusion
+from models.model_single import ModelEmbSimpleFusion, ModelEmbFusionLarge
 
 from dataset.davsod_video import get_davsod_dataset_test
 from dataset.ViDSOD100_flow import get_vidsod_dataset_test
@@ -224,7 +224,7 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_optical_flow']:
-        model = ModelEmbSimpleFusion(
+        model = ModelEmbFusionLarge(
             args=args, size_out=64, train_decoder_only=False
         ).to(device)
     elif args['use_depth']:
