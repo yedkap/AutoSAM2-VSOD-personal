@@ -208,14 +208,15 @@ class ModelEmbFusionLarge(nn.Module):
         self.train_decoder_only = train_decoder_only
 
     def forward(self, img, depth_image, optical_flow_image):
+        depth_image = depth_image.repeat(1, 3, 1, 1)
         if self.train_decoder_only:
             with torch.no_grad():
                 z_rgb = self.backbone_1(img)
-                z_depth = self.backbone_1(depth_image)
+                z_depth = self.backbone_2(depth_image)
                 z_of = self.backbone_3(optical_flow_image)
         else:
             z_rgb = self.backbone_1(img)
-            z_depth = self.backbone_1(depth_image)
+            z_depth = self.backbone_2(depth_image)
             z_of = self.backbone_3(optical_flow_image)
         z = [torch.cat((z_rgb_res, z_depth_res, z_of_res), dim=1) for z_rgb_res, z_depth_res, z_of_res in zip(z_rgb[1:4], z_depth[1:4], z_of[1:4])]
         z = [None, *z]
