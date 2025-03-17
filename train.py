@@ -6,7 +6,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
-from models.model_single import ModelEmbESA, ModelEmbSimpleDepth, ModelEmbSimpleFusion
+from models.model_single import ModelEmbESA, ModelEmbSimpleDepth, ModelEmbSimpleFusion, ModelEmbFusionLarge
 from dataset.davsod_video import get_davsod_dataset
 from dataset.ViDSOD100_flow import get_vidsod_dataset
 from sam2.build_sam import build_sam2_video_predictor
@@ -374,7 +374,7 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_optical_flow']:
-        model = ModelEmbSimpleFusion(
+        model = ModelEmbFusionLarge(
             args=args, size_out=64, train_decoder_only=args['decoder_only']
         ).to(device)
     elif args['use_depth']:
