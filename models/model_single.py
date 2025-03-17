@@ -196,11 +196,7 @@ class ModelEmbFusionLarge(nn.Module):
         self.backbone_1 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         self.backbone_2 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
         self.backbone_3 = HarDNet(depth_wise=bool(int(args['depth_wise'])), arch=int(args['order']), args=args)
-        d = [
-            1, self.backbone_1.encoder_rgb.down_4_channels_out,
-            self.backbone_1.encoder_rgb.down_8_channels_out,
-            self.backbone_1.encoder_rgb.down_16_channels_out
-        ]
+        d = self.backbone_1.full_features
         d_in = [feature * 3 for feature in d]
         d_reduced = d
         self.decoder = SmallDecoderSimpleFusion(d_in, out=256, full_features_reduced=d_reduced)
