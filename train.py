@@ -441,7 +441,7 @@ def main(args=None, sam_args=None, test_run=False):
             scheduler.step()
         if epoch % int(args['save_every']) == 0:
             torch.save(model.state_dict(), args['path_occasional'].format(epoch))
-        if epoch % args['save_every'] == 0:
+        if epoch % args['eval_every'] == 0:
             with torch.no_grad():
                 f_beta_val = inference_ds.inference_ds(ds_val, model.eval(), sam, epoch, device)
                 if f_beta_val > best:
@@ -479,6 +479,7 @@ if __name__ == '__main__':
     parser.add_argument('--cutoff_eval', default=None, type=int, help='sets max length for eval datasets.',
                         required=False)
     parser.add_argument('--save_every', default=10, type=int, help='save every n epochs')
+    parser.add_argument('--eval_every', default=10, type=int, help='evaluate every n epochs')
     parser.add_argument('--seq_len', default=2, type=int, help='sequence length, training, davsod dataset')
     parser.add_argument('--decoder_only', default=0, type=int, help='update only ModelEmb decoder')
     parser.add_argument('--lr_decay', default=0, type=int, help='if 1, uses learning rate decay')
