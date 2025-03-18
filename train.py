@@ -373,6 +373,7 @@ def main(args=None, sam_args=None, test_run=False):
     else:
         device = torch.device("cpu")
 
+
     if args['use_optical_flow']:
         model = ModelEmbFusionLarge(
             args=args, size_out=64, train_decoder_only=args['decoder_only']
