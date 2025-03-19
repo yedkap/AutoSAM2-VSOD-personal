@@ -70,7 +70,7 @@ class ModelEmb(nn.Module):
 
 class ModelEmbSimpleSingleFusion(nn.Module):
     def __init__(self, args, secondary_input_type='optical_flow', size_out=64, train_decoder_only=False):
-        super(ModelEmbSimpleDepth, self).__init__()
+        super(ModelEmbSimpleSingleFusion, self).__init__()
         print('using simple depth integration as greyscale input')
         print('using HarDNet backbone')
         # self.depth_conv = nn.Conv2d(1, 3, kernel_size=1, stride=1, bias=False)
