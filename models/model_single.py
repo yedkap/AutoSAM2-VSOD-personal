@@ -94,7 +94,7 @@ class ModelEmbSimpleSingleFusion(nn.Module):
             secondary_input = depth_image.repeat(1, 3, 1, 1)
             # depth_input = self.depth_conv(depth_image)
         else:
-            secondary_input = optical_flow
+            secondary_input = optical_flow_image
         if self.train_decoder_only:
             with torch.no_grad():
                 z_img = self.backbone_1(img)
