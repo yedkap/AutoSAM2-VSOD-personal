@@ -68,8 +68,8 @@ class ModelEmb(nn.Module):
         return dense_embeddings
 
 
-class ModelEmbSimpleDepth(nn.Module):
-    def __init__(self, args, secondary_input_type, size_out=64, train_decoder_only=False):
+class ModelEmbSimpleSingleFusion(nn.Module):
+    def __init__(self, args, secondary_input_type='optical_flow', size_out=64, train_decoder_only=False):
         super(ModelEmbSimpleDepth, self).__init__()
         print('using simple depth integration as greyscale input')
         print('using HarDNet backbone')
