@@ -147,7 +147,6 @@ class ModelWrapper:
     def __init__(self, use_optical_flow, use_depth):
         self.use_optical_flow = use_optical_flow
         self.use_depth = use_depth
-        assert not (self.use_optical_flow and (not self.use_depth))
 
     def normalize_color(self, image, device):
         pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 1, 3, 1, 1)
