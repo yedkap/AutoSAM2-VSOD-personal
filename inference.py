@@ -5,7 +5,7 @@ import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
 from models.model_single import ModelEmbESA
-from models.model_single import ModelEmbSimpleFusion, ModelEmbFusionLarge
+from models.model_single import ModelEmbSimpleFusion, ModelEmbSimpleSingleFusion, ModelEmbFusionLarge
 
 from dataset.davsod_video import get_davsod_dataset_test
 from dataset.ViDSOD100_flow import get_vidsod_dataset_test
@@ -224,9 +224,14 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_optical_flow']:
-        model = ModelEmbSimpleFusion(
-            args=args, size_out=64, train_decoder_only=False
-        ).to(device)
+        if args['use_depth']:
+            model = ModelEmbFusionLarge(
+                args=args, size_out=64, train_decoder_only=False
+            ).to(device)
+        else:
+            model = ModelEmbSimpleSingleFusion(
+                args=args, secondary_input_type='optical_flow', size_out=64, train_decoder_only=False
+            ).to(device)            
     elif args['use_depth']:
         if args['use_esa']:
             model = ModelEmbESA(args=args, size_out=64, train_decoder_only=False).to(device)
@@ -292,8 +297,7 @@ if __name__ == '__main__':
     args['use_optical_flow'] = args['use_optical_flow'] == 1
     args['test_run'] = args['test_run'] == 1
 
-    if args['use_optical_flow']:
-        assert args['use_depth']
+    if (args['use_optical_flow']) and (args['use_depth']):
         assert args['use_esa']
 
     os.makedirs('results_test', exist_ok=True)
