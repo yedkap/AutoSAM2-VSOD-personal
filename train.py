@@ -6,7 +6,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 from models.model_single import ModelEmb as ModelEmb
-from models.model_single import ModelEmbESA, ModelEmbSimpleDepth, ModelEmbSimpleFusion, ModelEmbFusionLarge
+from models.model_single import ModelEmbESA, ModelEmbSimpleSingleFusion, ModelEmbSimpleFusion, ModelEmbFusionLarge
 from dataset.davsod_video import get_davsod_dataset
 from dataset.ViDSOD100_flow import get_vidsod_dataset
 from sam2.build_sam import build_sam2_video_predictor
@@ -163,10 +163,12 @@ class ModelWrapper:
         for idx_frame in range(num_frames):
             normalized_rgb_frame = normalized_rgb[:, idx_frame]
             if self.use_optical_flow:
-                assert self.use_depth
-                depth_frame = model_input_depth[:, idx_frame]
                 flow_frame = normalized_flow[:, idx_frame]
-                output = model(normalized_rgb_frame, depth_image=depth_frame, optical_flow_image=flow_frame)
+                if self.use_depth:
+                    depth_frame = model_input_depth[:, idx_frame]
+                    output = model(normalized_rgb_frame, depth_image=depth_frame, optical_flow_image=flow_frame)
+                else:
+                    output = model(normalized_rgb_frame, optical_flow_image=flow_frame)                    
             elif self.use_depth:
                 depth_frame = model_input_depth[:, idx_frame]
                 output = model(normalized_rgb_frame, depth_image=depth_frame)
@@ -374,9 +376,14 @@ def main(args=None, sam_args=None, test_run=False):
         device = torch.device("cpu")
 
     if args['use_optical_flow']:
-        model = ModelEmbFusionLarge(
-            args=args, size_out=64, train_decoder_only=args['decoder_only']
-        ).to(device)
+        if args['use_depth']:
+            model = ModelEmbFusionLarge(
+                args=args, size_out=64, train_decoder_only=args['decoder_only']
+            ).to(device)
+        else:
+            model = ModelEmbSimpleSingleFusion(
+                args=args, secondary_input_type='optical_flow', size_out=64, train_decoder_only=args['decoder_only']
+            ).to(device)            
     elif args['use_depth']:
         if args['use_esa']:
             model = ModelEmbESA(args=args, size_out=64, train_decoder_only=args['decoder_only']).to(device)
@@ -497,8 +504,7 @@ if __name__ == '__main__':
     args['test_run'] = args['test_run'] == 1
     args['use_esa'] = args['use_esa'] == 1
 
-    if args['use_optical_flow']:
-        assert args['use_depth']
+    if (args['use_optical_flow']) and (args['use_depth']):
         assert args['use_esa']
 
     os.makedirs('results', exist_ok=True)
