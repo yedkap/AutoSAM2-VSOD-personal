@@ -89,7 +89,7 @@ class ModelEmbSimpleSingleFusion(nn.Module):
         self.secondary_input_type = secondary_input_type
         assert secondary_input_type in ['depth', 'optical_flow']
 
-    def forward(self, img, depth_image=None, optical_flow=None):
+    def forward(self, img, depth_image=None, optical_flow_image=None):
         if self.secondary_input_type == 'depth':
             secondary_input = depth_image.repeat(1, 3, 1, 1)
             # depth_input = self.depth_conv(depth_image)
