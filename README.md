@@ -3,7 +3,7 @@ AutoSAM2-VSOD: Adapting SAM2 to VSOD by Overloading the Prompt Encoder
 
 ## Overview
 
-This work adapts the Segment Anything Model 2 (SAM2) for for Video Saliency Object Detection (VSOD) by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification trains SAM2 to segment the salient object or objects in images. 
+This work adapts the Segment Anything Model 2 (SAM2) for Video Saliency Object Detection (VSOD) by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification trains SAM2 to segment the salient object or objects in images. 
 
 ## Paper
 
