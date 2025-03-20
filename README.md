@@ -1,44 +1,34 @@
-# AutoSAM
+# AutoSAM2-VSOD
 AutoSAM2-VSOD: Adapting SAM2 to VSOD by Overloading the Prompt Encoder
 
 ## Overview
 
-This work improves the Segment Anything Model 2 (SAM2) for medical image segmentation by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification achieves state-of-the-art results on medical images and video benchmarks. 
+This work adapts the Segment Anything Model 2 (SAM2) for for Video Saliency Object Detection (VSOD) by replacing its conditioning mechanism with an image-based encoder. Without further fine-tuning SAM, this modification trains SAM2 to segment the salient object or objects in images. 
 
 ## Paper
 
-The paper associated with this repository can be found [here](https://arxiv.org/pdf/2306.06370.pdf).
+The paper associated with this repository can be found [here]().
 
 ## Datasets
 
-We used the following datasets in our experiments:
+We used the following datasets linked to in the following repositories in our experiments:
 
-[monu](https://drive.google.com/drive/folders/1bzyHsDWhjhiwzpx_zJ5dpMG3-5F-nhT4?usp=drive_link)
-[glas](https://drive.google.com/drive/folders/1z9xBesNhvuM08yUOpOWcUy7OnBGHenFv?usp=drive_link)
-[polyp](https://drive.google.com/drive/folders/1S11HsauwKO206CPzrGBnTid-nbQMhbZz?usp=drive_link)
+[DAVSOD](https://github.com/DengPingFan/DAVSOD)
+[ViDSOD-100](https://github.com/jhl-Det/RGBD_Video_SOD)
 
-## SAM checkopints
+## SAM2 checkpoints
 
-[sam base](https://drive.google.com/file/d/1ZwKc-7Q8ZaHfbGVKvvkz_LPBemxHyVpf/view?usp=drive_link)
-[sam large](https://drive.google.com/file/d/16AhGjaVXrlheeXte8rvS2g2ZstWye3Xx/view?usp=drive_link)
-[sam huge](https://drive.google.com/file/d/1tFYGukHxUCbCG3wPtuydO-lYakgpSYDd/view?usp=drive_link)
+Linked to in original SAM2 repository:
+[SAM2](https://github.com/facebookresearch/sam2)
 
 ## Usage
 
 To use AutoSAM2-VSOD, follow these steps:
 
-1. Clone the repository:
+training:
 
-   ```bash
-   git clone https://github.com/your_username/AutoSAM.git
-   cd AutoSAM/
+python train.py --root_data_dir <~/dataset_directory>
 
-2. conda:
+inference:
 
-   ```bash
-   conda create --name autosam python=3.10
-   pip install -r requirements.txt
-
-3. training:
-   ```bash
-   python train.py
+python inference.py --root_data_dir <~/dataset_directory> --folder <train model folder number>
