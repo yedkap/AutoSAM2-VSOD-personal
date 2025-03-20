@@ -99,48 +99,10 @@ def get_input_dict(imgs, original_sz, img_sz):
     return batched_input
 
 
-#
-#
-# def postprocess_masks(masks_dict):
-#     masks = torch.zeros((len(masks_dict), *masks_dict[0]['low_res_logits'].squeeze().shape)).unsqueeze(dim=1).cuda()
-#     ious = torch.zeros(len(masks_dict)).cuda()
-#     for i in range(len(masks_dict)):
-#         cur_mask = masks_dict[i]['low_res_logits'].squeeze()
-#         cur_mask = (cur_mask - cur_mask.min()) / (cur_mask.max() - cur_mask.min())
-#         masks[i, 0] = cur_mask.squeeze()
-#         ious[i] = masks_dict[i]['iou_predictions'].squeeze()
-#     return masks, ious
-
-
 def unpad(mask, original_size):
-    # if len(original_size.shape) == 2:
-    #     original_size = original_size[0]
     H_orig, W_orig = int(original_size[0, 0]), int(original_size[0, 1])
     mask = mask[..., :H_orig, :W_orig]
     return mask
-
-
-# def call_model(model, model_input_rgb, model_input_depth, device, use_depth):
-#     # Define pixel mean and std as tensors
-#     pixel_mean = torch.tensor([123.675, 116.28, 103.53], device=device).view(1, 3, 1, 1)
-#     pixel_std = torch.tensor([58.395, 57.12, 57.375], device=device).view(1, 3, 1, 1)
-#     # Normalize the input
-#     normalized_input = (model_input_rgb - pixel_mean) / pixel_std
-#     model_input_depth = (model_input_depth - pixel_mean) / pixel_std
-#
-#     num_frames = model_input_rgb.shape[1]
-#     outputs = []
-#     for idx_frame in range(num_frames):
-#         normalized_input_frame = normalized_input[:, idx_frame]
-#         depth_frame = model_input_depth[:, idx_frame]
-#         if use_depth:
-#             output = model(normalized_input_frame, depth_frame)
-#         else:
-#             output = model(normalized_input_frame)
-#         outputs.append(output)
-#     outputs = torch.stack(outputs, dim=1)
-#
-#     return outputs
 
 
 class ModelWrapper:
