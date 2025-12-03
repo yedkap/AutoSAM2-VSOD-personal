@@ -7,7 +7,7 @@ This work adapts the Segment Anything Model 2 (SAM2) for Video Saliency Object D
 
 ## Paper
 
-The paper associated with this repository can be found in [docs/paper.pdf](docs/paper.pdf).
+The paper associated with this repository can be found in [docs/AutoSam2-VSOD.pdf](docs/AutoSam2-VSOD.pdf).
 
 ## Datasets
 
