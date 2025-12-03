@@ -41,4 +41,4 @@ https://github.com/talshaharabany/AutoSAM
 https://github.com/facebookresearch/segment-anything
 https://github.com/facebookresearch/sam2
 https://github.com/TUI-NICR/ESANet
-https://github.com/jhl-Det/RGBD Video SOD
+https://github.com/jhl-Det/RGBD_Video_SOD
