@@ -7,7 +7,7 @@ This work adapts the Segment Anything Model 2 (SAM2) for Video Saliency Object D
 
 ## Paper
 
-The paper associated with this repository can be found [here]().
+The paper associated with this repository can be found in [docs/paper.pdf](docs/paper.pdf).
 
 ## Datasets
 
@@ -36,9 +36,15 @@ python inference.py --root_data_dir <~/dataset_directory> --folder <train model 
 ## Sources and Referenced Repositories
 
 We started our project using the code from the AutoSAM project github page. We also worked with the code for SAM, SAM2, and ESANet. Noise augmentations were based on those from the ViDSOD-100 code.
+
 Links to the above are included below:
+
 https://github.com/talshaharabany/AutoSAM
+
 https://github.com/facebookresearch/segment-anything
+
 https://github.com/facebookresearch/sam2
+
 https://github.com/TUI-NICR/ESANet
+
 https://github.com/jhl-Det/RGBD_Video_SOD
